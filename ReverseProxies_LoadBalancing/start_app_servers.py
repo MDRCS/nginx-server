@@ -7,10 +7,11 @@ from pprint import pprint
 
 hostName = "localhost"
 
+
 class MyServer(BaseHTTPRequestHandler):
     def do_GET(self):
-        #print(self.server)
-        #print(self.headers)
+        # print(self.server)
+        # print(self.headers)
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
@@ -31,10 +32,11 @@ class MyServer(BaseHTTPRequestHandler):
                 </style>
                 <title>%s</title>
             </head>
-        <body>""" % self.headers['Host'] , "utf-8"))
+        <body>""" % self.headers['Host'], "utf-8"))
         self.wfile.write(bytes("<h1>{}</h1>".format(self.request.getsockname()[1]), "utf-8"))
         self.wfile.write(bytes("<h1>{}</h1>".format(time.strftime('%X')), "utf-8"))
         self.wfile.write(bytes("</body></html>", "utf-8"))
+
 
 def start_server(port):
     this_server = HTTPServer((hostName, port), MyServer)
@@ -47,6 +49,7 @@ def start_server(port):
 
     this_server.server_close()
     print(time.strftime('%X'), "App server stopped - http://%s:%s" % (hostName, port))
+
 
 # list of the ports the servers will listen on
 PORTS = [7001, 7002, 7003]

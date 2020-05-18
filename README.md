@@ -18,7 +18,7 @@
 
     + Vagrant file :
 
-    guest_ip = "192.168.33.10"
+    guest_ip = "192.168.0.3"
 
     Vagrant.configure("2") do |config|
 
@@ -82,7 +82,7 @@
     # Copy files from Host to Vagrant Ubuntu
     $ vagrant plugin install vagrant-scp
     $ vagrant ssh-config
-    $ scp -P 2201 -r site vagrant@127.0.0.1:/site
+    $ scp -P 2202 -r static-website vagrant@127.0.0.1:./static-website
     $ password: vagrant
     #you should not be sudo user. else exit
 
@@ -183,8 +183,87 @@
 
     $ nginx -t
     $ systemctl reload nginx
-sudo ln -s /etc/nginx/sites-available/example.com /etc/nginx/sites-enabled/
 
-rm /etc/nginx/sites-available/default
-rm /etc/nginx/sites-enabled/default
-/var/www/html# rm index.nginx-debian.html
+    $ vagrant destroy name
+
+### - Establish Authentification to access home page:
+
+    ### Install apache-utils
+    $ apt-get install -y apache2-utils
+
+    ### Create a password file outside of root directory for securing locations
+
+    $ htpasswd -b -c /etc/nginx/passwords admin #  -b -c for creating file
+    $ chown www-data /etc/nginx/passwords # only be read by root and nginx user
+    $ chmod 600 /etc/nginx/passwords
+
+    $ ls -ltr /etc/nginx/passwords # check if permissions has been applied
+
+    # if you want to change password of a user
+    $ htpasswd -b -c /etc/nginx/passwords admin
+    - deleting password
+    - new password
+
+    # add auth in the sectionyou want -> / or /images ..etc
+
+    $ vi /etc/nginx/conf.d/wisdompetmed.local.conf
+
+        location /images/ {
+            # Allow the contents of the /image folder to be listed
+            autoindex on;
+            auth_basic "Authentication is required...";
+            auth_basic_user_file /etc/nginx/passwords; # outside http-root for security reasons
+            access_log /var/log/nginx/wisdompetmed.local.images.access.log;
+            error_log /var/log/nginx/wisdompetmed.local.images.error.log;
+            allow 192.168.0.0/24;
+            allow 10.0.0.0/8;
+            deny all;
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+
+### - Configure HTTPS :
+
+    # SSL vs TLS
+    + SSL can be reversed and it's deprecated.
+    + TLS is used for encrypting web traffic.
+
+    $ apt install openssl
+    $ openssl req -batch -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/nginx.key -out /etc/ssl/certs/nginx.crt
+
+    # req "request to openssl"
+    # -batch "remove the prompts altogether"
+    # -x509 "generete a x509 certificate"
+    # -nodes "not use DES encryption method"
+    # -days 365 "lenth of time this certificate is valid"
+    #-newkey "to generate a new key"
+    # rsa:2048 "use RSA encryption method 2048-bit key"
+    # -keyout "path to store the key"
+    # -out "path to the certificate tha openssl wil generate"
+
+    $ ls -ltr /etc/ssl/certs/nginx.crt #check certificat
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+### - Reverse Proxy & Load balancer :
+
+    + Reverse proxy
+    - middle man between client and server
+    - could handle just one server
+    - help implementing SSL, Logs, for web applications
+    - compress data so that reduce latency of response.
+    - cache data so it can reduce request to a server each time.
+
+    + load balancer :
+    - could do all reverse proxy functionnalities but with many servers.
+
+    #Setup a Reverse Proxy
+
+    $ unlink /etc/nginx/sites-enabled/default
+    $ vim /etc/nginx/conf.d/upstream.conf
+
+    $ nginx -t
+    $ systemctl reload nginx
