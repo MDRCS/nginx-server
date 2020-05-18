@@ -260,10 +260,251 @@
     + load balancer :
     - could do all reverse proxy functionnalities but with many servers.
 
-    #Setup a Reverse Proxy
+    # Setup a Reverse Proxy
 
     $ unlink /etc/nginx/sites-enabled/default
     $ vim /etc/nginx/conf.d/upstream.conf
 
     $ nginx -t
     $ systemctl reload nginx
+
+![](./loadbalancer.png)
+
+    # Setup a Loadbalancer
+
+    # RUN THESE COMMANDS ON YOUR LOCAL WORKSTATION
+    # Start the virtual machine and log in
+    vagrant up
+    vagrant ssh
+
+    # Nginx is installed for you in this lesson.
+    # Proceed with the following steps to complete the configuration.
+
+    # RUN THESE COMMANDS ON THE VIRTUAL MACHINE
+    sudo su -
+
+    # Remove the default configuration
+    unlink /etc/nginx/sites-enabled/default
+
+    # Create a the new configuration
+    vim /etc/nginx/conf.d/upstream.conf
+
+    # Add the following contents to /etc/nginx/conf.d/upstream.conf:
+    upstream app_server_7001 {
+        server 127.0.0.1:7001;
+    }
+
+    upstream roundrobin {
+        # default is round robin
+        server 127.0.0.1:7001;
+        server 127.0.0.1:7002;
+        server 127.0.0.1:7003;
+    }
+
+    upstream leastconn {
+        # The server with the fewest connections will get traffic
+        least_conn;
+        server 127.0.0.1:7001;
+        server 127.0.0.1:7002;
+        server 127.0.0.1:7003;
+    }
+
+    upstream iphash {
+        # Connections will stick to the same server
+        ip_hash;
+        server 127.0.0.1:7001;
+        server 127.0.0.1:7002;
+        server 127.0.0.1:7003;
+    }
+
+    upstream weighted {
+        # More connections will be sent to the weighted server
+        server 127.0.0.1:7001 weight=2;
+        server 127.0.0.1:7002;
+        server 127.0.0.1:7003;
+    }
+
+    server {
+        listen 80;
+
+        location /proxy {
+            # Trailing slash is key!
+            proxy_pass http://app_server_7001/;
+        }
+
+        location /roundrobin {
+            proxy_pass http://roundrobin/;
+        }
+
+        location /leastconn {
+            proxy_pass http://leastconn/;
+        }
+
+        location /iphash {
+            proxy_pass http://iphash/;
+        }
+
+        location /weighted {
+            proxy_pass http://weighted/;
+        }
+    }
+
+    # Test and reload the configuration
+        nginx -t
+        systemctl reload nginx
+
+    ## Test and reload the configuration
+    nginx -t
+    systemctl reload nginx
+
+    ## cat start_app_servers.py
+    ```
+    #!/usr/bin/env python3
+    '''Module: Starts three HTTP servers'''
+    import os
+    import time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from pprint import pprint
+
+    hostName = "localhost"
+
+    class MyServer(BaseHTTPRequestHandler):
+        def do_GET(self):
+            #print(self.server)
+            #print(self.headers)
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(bytes("""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <style> h1 {
+                                font-size:100px;
+                                text-align:center;
+                                margin-left:auto;
+                                margin-right:auto
+                               }
+                            p {
+                                font-size:20px;
+                                text-align:center;
+                              }
+                    </style>
+                    <title>%s</title>
+                </head>
+            <body>""" % self.headers['Host'] , "utf-8"))
+            self.wfile.write(bytes("<h1>{}</h1>".format(self.request.getsockname()[1]), "utf-8"))
+            self.wfile.write(bytes("<h1>{}</h1>".format(time.strftime('%X')), "utf-8"))
+            self.wfile.write(bytes("</body></html>", "utf-8"))
+
+    def start_server(port):
+        this_server = HTTPServer((hostName, port), MyServer)
+        print(time.strftime('%X'), "App server started - http://%s:%s" % (hostName, port))
+
+        try:
+            this_server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
+        this_server.server_close()
+        print(time.strftime('%X'), "App server stopped - http://%s:%s" % (hostName, port))
+
+    # list of the ports the servers will listen on
+    PORTS = [7001, 7002, 7003]
+
+    # list to hold the PIDs from the forked servers
+    SERVERS = []
+
+    # start a fork for each port
+    for port in PORTS:
+        pid = os.fork()
+
+        if pid:
+            SERVERS.append(pid)
+        else:
+            start_server(port)
+            exit(0)
+
+    # wait for the servers to finish, bailing out on CTRL+C
+    for server in SERVERS:
+        try:
+            os.waitpid(server, 0)
+        except KeyboardInterrupt:
+            exit(0)
+
+    ```
+    ## Start the app servers
+    /usr/bin/python3  start_app_servers.py &
+
+    ## Open each proxy location in a browser:
+        http://192.168.0.3/roundrobin
+        http://192.168.0.3/leastconn
+        http://192.168.0.3/iphash
+        http://192.168.0.3/weighted
+
+    # troubleshooting problem - Address already in use:
+    $ ps -fA | grep python
+    $ kill 81651
+
+### - Improve performance
+    + Enable HTTP/2
+
+    HTTP/2 allows browsers to request files in parallel, greatly improving the speed of delivery.
+    You’ll need HTTPS enabled. Edit your browser configuration file, adding http2 to the listen directive,
+    then restart NGINX:
+        server {
+           listen 443 http2 default_server;
+           listen [::]:443 http2 default_server;
+           #... all other content
+        }
+
+    + Enable gzip compression
+
+    gzip compression can greatly decrease the size of files during transmission (sometimes by over 80%).
+    Add the following to your server block:
+        server {
+           #...previous content
+           gzip on;
+           gzip_types application/javascript image/* text/css;
+           gunzip on;
+        }
+
+    This will ensure that javascript files, images, and CSS files are always compressed.
+
+    Warning:
+    A security vulnerability exists when you enable gzip compression in conjunction with HTTPS that allows
+    attackers to decrypt data. For static websites that don’t serve users sensitive data, this is less of an issue,
+    but for any site serving sensitive information you should disable compression for those resources.
+
+    + Enable client-side caching
+    Some files don’t ever change, or change rarely, so there’s no need to have users re-download the latest version.
+    You can set cache control headers to provide hints to browsers to let them know what files they shouldn’t request again.
+
+        server {
+           #...after the location / block
+           location ~* \.(jpg|jpeg|png|gif|ico)$ {
+               expires 30d;
+            }
+            location ~* \.(css|js)$ {
+               expires 7d;
+            }
+        }
+
+    Examine how frequently your various file types change, and then set them to expire at appropriate times.
+    If .css and .js files change regularly, you should set the expiration to be shorter. If image files like .jpg never
+    change, you can set them to expire months from now.
+
+    + Dynamically route subdomains to folders
+    If you have subdomains, chances are you don’t want to have to route every subdomain to the right folder.
+    It’s a maintenance pain. Instead, create a wildcard server block for it, routing to the folder that matches the name:
+
+        server {
+               server_name ~^(www\.)(?<subdomain>.+).jgefroh.com$ ;
+               root /var/www/jgefroh.com/$subdomain;
+        }
+        server {
+                server_name ~^(?<subdomain>.+).jgefroh.com$ ;
+                root /var/www/jgefroh.com/$subdomain;
+        }
+
+    Restart nginx, and you’ll automatically route subdomains to the same-named subfolder.
