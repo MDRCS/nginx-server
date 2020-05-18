@@ -1,6 +1,4 @@
 ## - NGINX IN DEPTH (webserver, load balancer, reverse proxy, static-content, high performance, proxy)
-sudo ln -s /etc/nginx/conf.d/wisdompetmed.local.conf /etc/nginx/sites-enabled/
-sudo ln -s /etc/nginx/conf.d/wisdompetmed.local.conf /etc/nginx/sites-available
 
     ## Config folders
     /etc/nginx
