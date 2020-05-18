@@ -1,0 +1,15 @@
+guest_ip  = "192.168.0.3"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/ubuntu-18.04"
+  config.vm.network "private_network", ip: guest_ip
+  config.vm.provision "shell", path: "provision.sh"
+end
+
+puts "-------------------------------------------------"
+puts "Proxy URL   : http://#{guest_ip}/proxy"
+puts "Proxy URL   : http://#{guest_ip}/roundrobin"
+puts "Proxy URL   : http://#{guest_ip}/leastconn"
+puts "Proxy URL   : http://#{guest_ip}/iphash"
+puts "Proxy URL   : http://#{guest_ip}/weighted"
+puts "-------------------------------------------------"
