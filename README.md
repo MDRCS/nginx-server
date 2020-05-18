@@ -58,7 +58,10 @@
     - cd /etc/nginx/sites-enabled/
     - ls -ltr
         default -> /etc/nginx/sites-available/default
-    - unlink default
+
+    ## Remove the default configuration
+    unlink /etc/nginx/sites-enabled/default
+
     - vi /etc/nginx/conf.d/wisdompetmed.local.conf
 
         server {
@@ -149,3 +152,39 @@
     $ nginx -t # check config files are correct.
     $ sudo lsof -P -n -i :80 -i :443 | grep LISTEN # check port 80 for http and 443 for https are open.
     $ sudo netstat -plan | grep nginx # check processes that are listening.
+
+
+### - NGINX WebserverSecurity :
+
+    # best practices
+    1- keep your OS and Software up-to-date to protect yourself from old vulnerabilities.
+    2- restrict access where possible.
+    3- use passwords to protect sensitive informations.
+    4- use SSL to protect transmissions and identify your site.
+
+    # limit access
+    $ vi /etc/nginx/conf.d/wisdompetmed.local.conf
+        location /images/ {
+            deny all;
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    # you won't get the page.
+
+    # update restricction
+
+    location /images/ {
+        allow 192.168.0.0/24;
+        allow 10.0.0.0/8;
+        deny all;
+    }
+
+    $ nginx -t
+    $ systemctl reload nginx
+sudo ln -s /etc/nginx/sites-available/example.com /etc/nginx/sites-enabled/
+
+rm /etc/nginx/sites-available/default
+rm /etc/nginx/sites-enabled/default
+/var/www/html# rm index.nginx-debian.html
