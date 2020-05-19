@@ -45,7 +45,6 @@
         -> /var/www/html # where there are websites pages content
         -> /var/log/nginx #log files
 
-
     + NGINX commands :
     - systemctl start nginx
     - systemctl stop nginx
@@ -268,7 +267,7 @@
     $ nginx -t
     $ systemctl reload nginx
 
-![](./loadbalancer.png)
+![](./static/loadbalancer.png)
 
     # Setup a Loadbalancer
 
@@ -508,3 +507,334 @@
         }
 
     Restart nginx, and you’ll automatically route subdomains to the same-named subfolder.
+
+### - CentOS Nginx :
+    $ rpm -qa | grep nginx # check weather nginx exist in your machine
+    $ rpm -qa | grep epel-release # check weather epel-realease exist in your machine
+    $ yum install epel-release
+    $ yum install nginx
+
+    $ cd /etc/nginx
+    $ systemctl start nginx
+
+![](./static/nginx-architecture.png)
+
+    $ ps -ef --forest | grep nginx
+    # this command will help you figure out the master process and how many workers there are configured.
+
+    # nginx.conf in depth
+    $ vi nginx.conf
+
+        user nginx;
+        worker_processes auto; # option auto give you 2 workers by default
+
+        -> worker_processes 4;
+        $ nginx -t
+        $ systemctl reload nginx
+        $ ps -ef --forest | grep nginx
+            -> now there is 4 workers.
+
+        #this directive means that one worker handle 1024 request
+        events {
+            worker_connections 1024;
+        }
+
+    # you can create a file a put into instructions and import it to have an organized files
+    $ include ...
+
+    #html files served in the front of webserver
+    # ls /usr/share/nginx/html
+
+    NOTE
+    + Every important file used by nginx server you will find it in nginx.conf file
+
+    # Configure our own nginx webserver
+    $ cd /etc/nginx/conf.d
+    $ touch web.conf
+        server {
+           server_name example.com www.example.com;
+
+           location / {
+             root /var/www/example;
+             index index.html;
+           }
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+    $ mkdir /var/www/example
+    $ echo "this is my first nginx webserver." > index.html
+    # allow nginx to read files in this folder
+    # check workers user by running vi nginx.conf -> user www-data
+    $ sudo chown -R www-data /var/www/example
+
+# Config a Reverse Proxy :
+
+![](./static/reverse-proxy-architecture.png)
+
+    ```
+        webserver ip 192.168.0.4
+        reverse_proxy ip 192.168.0.5
+    ```
+
+
+    #create another vagrant ubuntu machine and setup softwares on it.
+    vagrant up
+    vagrant ssh
+
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+    # basic reverse_proxy example :
+
+        server {
+            server_name _;
+
+            location / {
+                  proxy_pass http://192.168.0.4;
+            }
+        }
+
+    $ cd /etc/nginx/sites-available
+    $ rm -rf default.conf
+    $ cd /etc/nginx/sites-enabled
+    $ unlink default
+    $ nginx -t
+    $ systemctl reload nginx
+
+    client : browser
+    reverse_proxy : http://192.168.0.5/ forward -> http://192.168.0.4
+
+    #check logs
+    $ cd /var/log/nginx
+    $ tail -f access.log
+
+### - Reverse Proxy - X-Real-IP problem :
+
+
+![](./static/x-real-ip-solution.png)
+
+    + the problem here is that requests handled by the server come from one ip
+      is the the reverse proxy ip
+
+![](./static/x-real-ip-problem.png)
+
+    + The solution should be to allow requests from the real ip
+
+    - Solution
+    # go to reverse-proxy server
+    $ cd /etc/nginx/conf.d
+
+        server {
+            server_name _;
+
+            location / {
+                  proxy_pass http://192.168.0.4;
+            ->    proxy_set_header X-Real-IP $remote_addr;
+            }
+        }
+
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    # go to webserver
+    #check logs
+    $ cd /var/log/nginx
+    $ tail -f access.log
+
+        192.168.0.1 - - [19/May/2020:07:13:47 +0000] "GET / HTTP/1.1" 304 0 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36"
+        # 192.168.0.1 is not the ip of reverse-proxy but it 's the real ip of the host.
+
+
+### - Reverse Proxy - Proxy Host Header problem :
+
+![](static/proxy-host-header.png)
+
+    + the problem here is that the server want to get the hostname not just the resource requested.
+    # one hostname
+    -> Get index.html   X
+
+    # multiple hostnames
+    -> Get blog.mdrahali.com/index.html   -> "my name is Mohamed El RAhali"   V
+    -> Get stack.mdrahali.com/index.html   -> "hello world"   V
+
+    + if we have multiple hostname for multiple purpose, it's an obligation to forward hostname
+      to help webserver figure out what to respond
+
+    NB : if we have one hostname, its not important to config this feature.
+
+
+    #go to webserver
+
+    $ cd /var/www/example
+    $ mkdir example.com
+    $ mkdir example.net
+    $ cd example.com
+    $ echo "this is my first nginx webserver." > index.html
+    $ cd ..
+    $ cd example.net
+    $ echo "hello world" > index.html
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+
+        server {
+           server_name mdrahali.com;
+
+           location / {
+             root /var/www/example/mdrahali.com;
+             index index.html;
+           }
+        }
+
+        server {
+           server_name mdrahali.net;
+
+           location / {
+             root /var/www/example/mdrahali.net;
+             index index.html;
+           }
+        }
+
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+
+        server {
+            server_name _;
+
+            location / {
+                  proxy_pass http://192.168.0.4;
+            ->    proxy_set_header Host $host;
+            }
+        }
+
+    $ sudo chown -R www-data /var/www/example
+    $ sudo chown -R www-data mdrahali.com/
+    $ sudo chown -R www-data mdrahali.net/
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    $ For testing and accepting doing a "catch-all", you can use server_name _ .
+
+    $ cd /etc
+    $ vi hosts
+    #add this
+    $ 127.0.0.1 locahost www.mdrahali.com mdrahali.com www.mdrahali.net mdrahali.net
+
+    $ curl mdrahali.com
+    $ curl mdrahali.net
+
+    $ cd /var/log/nginx
+    $ tail -f access.log
+    This directive is available as part of nginx commercial subscription.
+
+### - Loadbalancer :
+
+    + prerequisites - Vagrant VM:
+
+        1- server-1 -> 192.168.0.6
+        2- server-2 -> 192.168.0.4
+        3- load-balancer -> 192.168.0.5
+
+    1- server-1 -> 192.168.0.6
+    $ cd /var/www/
+    $ mkdir example
+    $ cd example && echo "server 1" > index.html
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+        server {
+           server_name _;
+
+           location / {
+             root /var/www/example/;
+             index index.html;
+           }
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+    $ curl localhost
+        -> server 1
+
+    2- server-2 -> 192.168.0.4
+    $ cd /var/www/
+    $ mkdir example
+    $ cd example && echo "server 2" > index.html
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+        server {
+           server_name _;
+
+           location / {
+             root /var/www/example/;
+             index index.html;
+           }
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+    $ curl localhost
+        -> server 2
+
+    3- load-balancer -> 192.168.0.5
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+        upstream backend {
+            server 192.168.0.4;
+            server 192.168.0.6;
+            zone backend 64k;
+        }
+
+        server {
+                server_name mdrahali.com;
+                listen 80;
+                location / {
+                      proxy_pass http://backend;
+                      #health_check interval=10 fails=3 passes=2;
+               }
+        }
+
+    NOTE
+    -> `health_check` directive is available as part of nginx commercial subscription.
+    -> it ping servers each time with an interval to see if server is down/up.
+
+    # load balancing method implemented here is Round Robin. each server sequentially.
+
+    ++ The zone directive defines a memory zone that is shared among worker processes
+       and is used to store the configuration of the server group. This enables the worker
+       processes to use the same set of counters to keep track of responses from the servers
+       in the group. The zone directive also makes the group dynamically configurable.
+
+       - 64k :
+        Setting the Size for the Zone
+        There are no exact settings due to quite different usage patterns. Each feature,
+        such as sticky cookie/route/learn load balancing, health checks, or re-resolving
+        will affect the zone size.
+
+        - For example, the 256 Kb zone with the sticky_route session persistence method and a single health check can hold up to:
+
+            128 servers (adding a single peer by specifying IP:port);
+            88 servers (adding a single peer by specifying hostname:port, hostname resolves to single IP);
+            12 servers (adding multiple peers by specifying hostname:port, hostname resolves to many IPs).
+
+
+    # Testing :
+
+    ## Open each proxy location in a browser:
+        http://192.168.0.5/roundrobin
+        http://192.168.0.5/leastconn
+        http://192.168.0.5/iphash
+        http://192.168.0.5/weighted
+
+    ## also you can test in terminal
+    $ curl mdrahali.com/roundrobin
+    $ curl mdrahali.com/leastconn
+    $ curl mdrahali.com/iphash
+    $ curl mdrahali.com/weighted
