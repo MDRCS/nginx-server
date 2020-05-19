@@ -302,6 +302,7 @@
 
     upstream leastconn {
         # The server with the fewest connections will get traffic
+        # if we have two servers one take 1 sec and other take 20sec we will go each time for 1 sec server.
         least_conn;
         server 127.0.0.1:7001;
         server 127.0.0.1:7002;
@@ -807,6 +808,18 @@
 
     # load balancing method implemented here is Round Robin. each server sequentially.
 
+    1- first scenario
+    - imagine 2 servers are down, 1 server is up and worker 3 requesting each server to respond to a request
+      he will mark server 1,2 as down and get respond from server 3 and serve the client.
+      the same scenario will repeat with other workers because each worker has it's own memory
+
+![](./static/worker_memory_problem.png)
+
+    + this is why nginx have a mechanism to configure a shared-memory to optimize this process.
+    -> zone backend 64k
+
+![](./static/shared_memory_archiecture.png)
+
     ++ The zone directive defines a memory zone that is shared among worker processes
        and is used to store the configuration of the server group. This enables the worker
        processes to use the same set of counters to keep track of responses from the servers
@@ -838,3 +851,65 @@
     $ curl mdrahali.com/leastconn
     $ curl mdrahali.com/iphash
     $ curl mdrahali.com/weighted
+
+
+### - Health monitoring - active & passive :
+
+    + tip 1 -  i can mark a server as down by :
+        upstream backend {
+            server 192.168.0.4 down;
+            server 192.168.0.6;
+            zone backend 64k;
+        }
+
+    + tip 2 - passive monitoring :
+
+         upstream backend {
+            server 192.168.0.4 max_fails=3 fail_timeout=50;
+            server 192.168.0.6;
+            zone backend 64k;
+        }
+
+        # go to server 1
+        $ systemctl stop nginx
+
+        # go to load balancer
+        # for i in {1..3}; do curl mdrahali.com
+
+        # go to server 1
+        $ systemctl start nginx
+
+        # go to load balancer
+        $ curl mdrahali.com
+        # you will observe that load-balancer won't request server 1 because he considere it as down fro 50s.
+
+    max_fails=number
+    sets the number of unsuccessful attempts to communicate with the server that should happen
+    in the duration set by the fail_timeout parameter to consider the server unavailable for a
+    duration also set by the fail_timeout parameter. By default, the number of unsuccessful attempts is set to 1.
+
+    fail_timeout=time
+    sets
+    the time during which the specified number of unsuccessful attempts to communicate with the server
+    should happen to consider the server unavailable;
+    and the period of time the server will be considered unavailable.
+    By default, the parameter is set to 10 seconds.
+
+    + for more options in load-balancers -> http://nginx.org/en/docs/http/ngx_http_upstream_module.html
+
+
+    + tip 3 - active monitoring :
+
+    + health_check directive:
+    interval – How often (in seconds) NGINX Plus sends health check requests (default is 5 seconds)
+    passes – Number of consecutive health checks the server must respond to to be considered healthy (default is 1)
+    fails – Number of consecutive health checks the server must fail to respond to to be considered unhealthy (default is 1)
+
+    server {
+        listen       80;
+        proxy_pass   backend;
+        health_check interval=10 passes=2 fails=3;
+    }
+
+
+
