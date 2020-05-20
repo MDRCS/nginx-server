@@ -1432,3 +1432,20 @@
     # same response -> malicious request
 
     $ tail -f /var/log/nginx/error.log
+
+### - Enabling FastCGI Caching on your VPS
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+    # add :
+             fastcgi_cache_path /etc/nginx/cache levels=1:2 keys_zone=MYAPP:100m inactive=60m;
+             fastcgi_cache_key "$scheme$request_method$host$request_uri";
+
+            location / {
+                [...]
+                fastcgi_cache MYAPP;
+                fastcgi_cache_valid 200 60m;
+            }
+
+    #display cache recursively
+    $ ls -lR /etc/nginx/cache/
