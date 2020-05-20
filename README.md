@@ -1216,3 +1216,46 @@
         127.0.0.1 - - [20/May/2020:07:19:16 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
         127.0.0.1 - - [20/May/2020:07:19:17 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
         127.0.0.1 - - [20/May/2020:07:19:18 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
+
+### - Compression :
+
+    + Compression is a great way to reduce the amount of packets to send to client requesting a resource
+      Compression Algorithms could reduce data sent to users by 70% to it enhance speed alot.
+
+    $ vi demo.txt
+    $ ls -lh
+    $ gzip -9 -c demo.txt > demo.gz
+    $ ls -lh
+
+        -rw-rw-r-- 1 vagrant vagrant 2.1K May 20 07:31 demo.gz
+        -rw-rw-r-- 1 vagrant vagrant 5.3K May 20 07:31 demo.txt
+
+    - 65% reducing size of data.
+
+    #Add Compression to the server:
+    $ vi nginx.conf
+        gzip on;
+        -> gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+        gzip_disable "msie6";
+
+    $ systemctl reload nginx
+
+    $ cd /var/www/example
+    $ vi demo.txt
+    #add alot of text
+
+    $ curl mdrahali.com/demo.txt > c1.txt
+    $ curl -H "Accept-Encoding: gzip" mdrahali.com/demo.txt > c2.txt
+    $ ls -lh
+    #check sizes of each file.
+
+    # level of compression :
+
+    $ vi nginx.conf
+    # add -> gzip_comp_level 9;
+
+    + The level of gzip compression simply determines how compressed the data is on a scale from 1-9,
+      where 9 is the most compressed. The trade-off is that the most compressed data usually requires
+      the most work to compress/decompress, so if you have it set fairly high on a high-volume website,
+      you may feel its effect.
+
