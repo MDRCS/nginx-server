@@ -244,6 +244,30 @@
 
     $ ls -ltr /etc/ssl/certs/nginx.crt #check certificat
 
+    $ vi /etc/nginx/conf.d/wisdompetmed.local.conf
+
+
+        server {
+            listen       443 ssl;
+            server_name  localhost;
+
+            ssl_certificate      /etc/ssl/certs/nginx.crt;
+            ssl_certificate_key  /etc/ssl/private/nginx.key;
+
+            ssl_session_cache    shared:SSL:1m;
+            ssl_session_timeout  5m;
+
+            ssl_ciphers  HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers  on;
+
+            location / {
+                root   /etc/nginx/html/;
+                index  index.html index.htm;
+            }
+           }
+
+        }
+
     $ nginx -t
     $ systemctl reload nginx
 
