@@ -912,4 +912,115 @@
     }
 
 
+### - Cache Header Control :
+
+    # go to webserver
+
+    $ vagrant ssh-config
+    $ vagrant ssh
+
+    # go to a new tab ./nginx-server
+
+    $ cd static
+    $ scp -P 2201 -r loadbalancer.png vagrant@127.0.0.1:.
+
+    # go to webserver
+
+    $ sudo mv loadbalancer.png /var/www/example
+    $ cd /var/www/example && echo "hello world" > demo.txt
+    $ sudo su -
+    $ cd /etc/nginx/conf.d/
+    $ vi web.conf
+
+        server {
+           server_name _;
+
+           location / {
+             root /var/www/example/;
+             index index.html;
+           }
+
+         location ~ \.(png) {
+             root /var/www/example/;
+             add_header Cache-Control max-age=120;
+             # this header means that the server will cache the png files for 120 sec. and delete it.
+           }
+
+         location ~ \.(txt) {
+             root /var/www/example/;
+             expires -1;
+             # expires -1 means don't cache this resource, there is others options : expires 48h; expires 1d; expires 2w; ..etc
+           }
+        }
+
+    $ nginx -t
+    $ systemctl reload nginx
+    $ curl -I http://192.168.0.6/loadbalancer.png
+
+        HTTP/1.1 200 OK
+        Server: nginx/1.10.3 (Ubuntu)
+        Date: Wed, 20 May 2020 03:57:19 GMT
+        Content-Type: image/png
+        Content-Length: 891061
+        Last-Modified: Wed, 20 May 2020 03:42:33 GMT
+        Connection: keep-alive
+        ETag: "5ec4a729-d98b5"
+        Cache-Control: max-age=120
+        Accept-Ranges: bytes
+
+    $ curl -I http://192.168.0.6/demo.txt
+        HTTP/1.1 200 OK
+        Server: nginx/1.10.3 (Ubuntu)
+        Date: Wed, 20 May 2020 03:58:00 GMT
+        Content-Type: text/plain
+        Content-Length: 15
+        Last-Modified: Wed, 20 May 2020 03:45:14 GMT
+        Connection: keep-alive
+        ETag: "5ec4a7ca-f"
+        Expires: Wed, 20 May 2020 03:57:59 GMT
+        Cache-Control: no-cache
+        Accept-Ranges: bytes
+
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+            expires 2d;
+            add_header Cache-Control "public, no-transform";
+        }
+
+### + Other Cache directive :
+
+    - Cache-Control directives#
+      The following is a list of the common directives used and configured when using the Cache-Control header.
+      See HTTP/1.1 section 14.9 for a further explanation of the directives available.
+
+        Cache-Control: no-cache#
+        no-cache uses the ETag header to tell caches that this resource cannot be reused without first checking
+        if the resource has changed on the origin server. This means that no-cache will make a trip back to
+        the server to ensure the response has not changed and therefore is not required to download the
+        resource if that is the case.
+
+        Cache-Control: no-store#
+        no-store is similar to no-cache in that the response cannot be cached and re-used, however there is
+        one important difference. no-store requires the resource to be requested and downloaded from the
+        origin server each time. This is an important feature when dealing with private information.
+
+        Cache-Control: public#
+        A response containing the public directive signifies that it is allowed to be cached by any
+        intermediate cache. This however is usually not included in responses as other directives already
+        signify if the response can be cached (e.g max-age).
+
+        Cache-Control: private#
+        The private directive signifies that the response can only be cached by the browser that is accessing the file.
+        This disallows any intermediate caches to store the response.
+
+        Cache-Control: max-age=<seconds>#
+        This directive tells the browser or intermediary cache how long the response can be used from the time it was requested.
+        A max-age of 3600 means that the response can be used for the next 60 minutes before it needs to fetch a new response from the origin server.
+
+        Cache-Control: s-maxage=<seconds>#
+        s-maxage is similar to the above mentioned max-age however the "s" stands for shared and is relevant only to CDNs or other intermediary caches.
+        This directive overrides the max-age and expires header.
+
+        Cache-Control: no-transform#
+        Intermediate proxies sometimes change the format of your images and files in order to improve performance. The no-transform directive
+        tells the intermediate proxies not to alter the format or your resources.
 
