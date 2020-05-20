@@ -1024,3 +1024,31 @@
         Intermediate proxies sometimes change the format of your images and files in order to improve performance. The no-transform directive
         tells the intermediate proxies not to alter the format or your resources.
 
+
+### - Connections persistence | Keep Alive :
+
+![](./static/keep-alive.png)
+
+    + The first parameter sets a timeout during which a keep-alive client connection will stay open on the server side.
+      The zero value disables keep-alive client connections.
+
+    # keepalive connection with resources in this directory / for 65 sec :
+        location / {
+             root /var/www/example/;
+             index index.html;
+             keepalive_timeout 65;
+           }
+
+    $ nginx -t
+    $ systemctl reload nginx
+    $ curl -I http://192.168.0.6/
+
+        HTTP/1.1 200 OK
+        Server: nginx/1.10.3 (Ubuntu)
+        Date: Wed, 20 May 2020 04:21:56 GMT
+        Content-Type: text/html
+        Content-Length: 9
+        Last-Modified: Tue, 19 May 2020 09:13:39 GMT
+        Connection: keep-alive
+        ETag: "5ec3a343-9"
+        Accept-Ranges: bytes
