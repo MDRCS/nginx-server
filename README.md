@@ -1191,3 +1191,28 @@
            }
 
     + more example  -> https://docs.nginx.com/nginx/admin-guide/security-controls/controlling-access-by-geoip/
+
+
+### - Logging :
+
+    $ vi nginx.conf
+    # add this two statements :
+
+    ->  log_format master '$remote_addr - $remote_user [$time_local] '
+                               '"$request" $status $body_bytes_sent '
+                               '"$http_referer" "$http_user_agent" "$gzip_ratio"';
+
+    # add just master to the path
+    ->  access_log /var/log/nginx/access.log master;
+
+    $ cd conf.d
+    $ vi web.conf
+    #add this -> access_log /var/log/nginx/example.log;
+
+    $ systemctl reload nginx
+
+    $ cd /var/log/nginx
+    $ cat example.log
+        127.0.0.1 - - [20/May/2020:07:19:16 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
+        127.0.0.1 - - [20/May/2020:07:19:17 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
+        127.0.0.1 - - [20/May/2020:07:19:18 +0000] "GET / HTTP/1.1" 200 9 "-" "curl/7.47.0"
