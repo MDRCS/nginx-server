@@ -1259,3 +1259,152 @@
       the most work to compress/decompress, so if you have it set fairly high on a high-volume website,
       you may feel its effect.
 
+### - Hotlink protection in Nginx
+
+    Hotlinked files can be a major cause for bandwidth leeching for some sites. Here’s how you can hotlink protect
+    your images and other file types using a simple location directive in your Nginx configuration file :
+
+    location ~ \.(jpe?g|png|gif)$ {
+         valid_referers none blocked mysite.com *.mysite.com;
+         if ($invalid_referer) {
+            return   403;
+        }
+    }
+
+    Use the pipe (“|”) to separate file extensions you want to hotlink protect.
+
+    The valid_referers directive contains the list of site for whom hotlinking is allowed. Here is an explanation
+    of the parameters for the valid_referers directive :
+
+    none - Matches the requests with no Referrer header.
+    blocked - Matches the requests with blocked Referrer header.
+    *.mydomain.com - Matches all the sub domains of mydomain.com. Since v0.5.33, * wildcards can be used in the server names.
+
+### - Nginx Firewall :
+
+![](./static/modsecurity-waf-plug-in.png)
+
+    + nginx -V check modules of nginx
+
+    -> Setup NAXSI
+
+    Step 1 — Install NGINX && NAXSI
+
+    $ wget http://nginx.org/download/nginx-1.14.0.tar.gz
+    $ wget https://github.com/nbs-system/naxsi/archive/0.56.tar.gz -O naxsi
+    $ tar -xvf nginx-1.14.0.tar.gz
+    $ tar -xvf naxsi
+    $ cd nginx-1.14.0
+    $ sudo apt-get update
+    $ sudo apt-get install build-essential libpcre3-dev libssl-dev
+    $ ./configure \
+        --conf-path=/etc/nginx/nginx.conf \
+        --add-module=../naxsi-0.56/naxsi_src/ \
+        --error-log-path=/var/log/nginx/error.log \
+        --http-client-body-temp-path=/var/lib/nginx/body \
+        --http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+        --http-log-path=/var/log/nginx/access.log \
+        --http-proxy-temp-path=/var/lib/nginx/proxy \
+        --lock-path=/var/lock/nginx.lock \
+        --pid-path=/var/run/nginx.pid \
+        --user=www-data \
+        --group=www-data \
+        --with-http_ssl_module \
+        --without-mail_pop3_module \
+        --without-mail_smtp_module \
+        --without-mail_imap_module \
+        --without-http_uwsgi_module \
+        --without-http_scgi_module \
+        --prefix=/usr
+
+    $ make
+    $ sudo make install
+
+    Step 2 — Configuring NAXSI
+
+    $ sudo cp ~/naxsi-0.56/naxsi_config/naxsi_core.rules /etc/nginx/
+    $ sudo vi /etc/nginx/naxsi.rules
+         SecRulesEnabled;
+         DeniedUrl "/error.html";
+
+         ## Check for all the rules
+         CheckRule "$SQL >= 8" BLOCK;
+         CheckRule "$RFI >= 8" BLOCK;
+         CheckRule "$TRAVERSAL >= 4" BLOCK;
+         CheckRule "$EVADE >= 4" BLOCK;
+         CheckRule "$XSS >= 8" BLOCK;
+    $ mkdir /usr/html/
+    $ sudo vi /usr/html/error.html
+        <html>
+          <head>
+            <title>Blocked By NAXSI</title>
+          </head>
+          <body>
+            <div style="text-align: center">
+              <h1>Malicious Request</h1>
+              <hr>
+              <p>This Request Has Been Blocked By NAXSI.</p>
+            </div>
+          </body>
+        </html>
+    $ sudo vi /etc/nginx/nginx.conf
+        http {
+            include       mime.types;
+            -> include /etc/nginx/naxsi_core.rules;
+            include /etc/nginx/conf.d/*.conf;
+            include /etc/nginx/sites-enabled/*;
+
+        location / {
+        include /etc/nginx/naxsi.rules;
+            root   html;
+            index  index.html index.htm;
+        }
+
+    Step 3 — Creating the Startup Script for Nginx
+
+    $ sudo vi /lib/systemd/system/nginx.service
+        [Unit]
+        Description=The NGINX HTTP and reverse proxy server
+        After=syslog.target network.target remote-fs.target nss-lookup.target
+
+        [Service]
+        Type=forking
+        PIDFile=/run/nginx.pid
+        ExecStartPre=/usr/sbin/nginx -t
+        ExecStart=/usr/sbin/nginx
+        ExecReload=/usr/sbin/nginx -s reload
+        ExecStop=/bin/kill -s QUIT $MAINPID
+        PrivateTmp=true
+
+        [Install]
+        WantedBy=multi-user.target
+
+    $ sudo mkdir -p /var/lib/nginx/body
+    $ sudo systemctl start nginx
+
+    Step 4 — Testing NAXSI
+    $ curl 'http://192.168.0.4/?q="><script>alert(0)</script>'
+    This URL includes the XSS script "><script>alert(0)</script> in the q parameter and should be rejected by the server.
+    According to the NAXSI rules that you set up earlier, you will be redirected to the error.html file and receive the following response:
+
+        <html>
+           <head>
+               <title>Blocked By NAXSI</title>
+                  </head>
+                  <body>
+                    <div style="text-align: center">
+                      <h1>Malicious Request</h1>
+                      <hr>
+                      <p>This Request Has Been Blocked By NAXSI.</p>
+                    </div>
+                  </body>
+            </html>
+
+    $ tail -f /var/log/nginx/error.log
+
+    Next, try another URL request, this time with a malicious SQL Injection query.
+    $ curl 'http://192.168.0.4/?q=1" or "1"="1"'
+
+    # same response -> malicious request
+
+    $ tail -f /var/log/nginx/error.log
