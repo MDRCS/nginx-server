@@ -1052,3 +1052,62 @@
         Connection: keep-alive
         ETag: "5ec3a343-9"
         Accept-Ranges: bytes
+
+
+### - Limit_Rate | download :
+
+    # webserver 1 - 192.168.0.6
+    $ webserver 2
+
+    # webserver 2
+    # download this resource from webserver
+    + wget http://192.168.0.6/loadbalancer.png
+
+        2020-05-20 04:36:56 (241 MB/s) - ‘loadbalancer.png’ saved [891061/891061]
+
+    - download bandwidth 241 MB/s
+
+    # webserver 1
+    $ cd /etc/nginx/conf.d#
+
+        location ~ \.(png) {
+             root /var/www/example/;
+             add_header Cache-Control max-age=120;
+             limit_rate 50k;
+           }
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    # go to webserver 2
+    + wget http://192.168.0.6/loadbalancer.png
+        2020-05-20 04:46:26 (51.0 KB/s) - ‘loadbalancer.png’ saved [891061/891061]
+
+    -> from 241 MB/s to 51.0 KB/s.
+
+### - Limit_Conn :
+
+    + Limiting the Request Rate
+    Rate limiting can be used to prevent DDoS attacks, or prevent upstream servers from being overwhelmed by too many requests at the same time.
+    The method is based on the leaky bucket algorithm: requests arrive at the bucket at various rates and leave the bucket at fixed rate.
+
+    Before using rate limiting, you will need to configure global parameters of the “leaky bucket”:
+
+    key - a parameter used to differentiate one client from another, generally a variable
+    shared memory zone - the name and size of the zone that keeps states of these keys (the “leaky bucket”)
+    rate - the request rate limit specified in requests per second (r/s) or requests per minute (r/m)
+    (“leaky bucket draining”). Requests per minute are used to specify a rate less than one request per second.
+
+    # webserver 1
+    $ vi web.conf
+        add this -> limit_conn_zone $binary_remote_addr zone=addr:10m;
+
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    # go to server 2
+    $ wget http://192.168.0.6/loadbalancer.png
+
+    # go to server 3
+    $ this service is temporarily unavailable.
