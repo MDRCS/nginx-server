@@ -1111,3 +1111,83 @@
 
     # go to server 3
     $ this service is temporarily unavailable.
+
+
+### - GeoIP :
+    + this technique is useful when you have for example DDOS attacks from one country/city you can block all ips of this country/city.
+
+
+    # go to webserver
+    # Setup GeoIP
+
+    # downlaod GeoIP Country from :
+
+    -> https://www.maxmind.com/en/accounts/312431/geoip/downloads
+    $ scp -P 2201 -r GeoLite2-Country.tar.gz vagrant@127.0.0.1:.
+    $ mkdir /etc/nginx/geoip
+    $ sudo mv GeoLite2-Country.tar.gz /etc/nginx/geoip
+    $ cd /etc/nginx/geoip
+    $ tar -zxvf GeoLite2-Country.tar.gz
+    $ mv GeoLite2-Country_20200519/ geoip_country/
+
+
+    #Add a Hostname to the webserver :
+    $ cd /etc
+    $ vi hosts
+        -> 127.0.0.1       localhost       mdrahali.com
+
+    $ cd /etc/nginx/
+    $ vi nginx.conf
+    # add this line in http directive :
+      -> geoip_country /usr/share/GeoIP/GeoIP.dat; # the country IP database
+         map "$host:$geoip_country_code" $deny_by_country {
+            ~^mdrahali.com:(?!MA) 1;
+            default 0;
+        }
+    $systemctl restart nginx
+    :MA for morocco if you want code for other countries check this website https://www.nirsoft.net/countryip/
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+        if ($deny_by_country) { return 403; }
+
+    $ nginx -t
+    $ systemctl reload nginx
+
+    # Testing GeoIP blocking
+    $ curl mdrahali.com
+        <html>
+            <head><title>403 Forbidden</title></head>
+                <body bgcolor="white">
+                    <center><h1>403 Forbidden</h1></center>
+                <hr><center>nginx/1.10.3 (Ubuntu)</center>
+            </body>
+        </html>
+
+    # Test on iP ADDRESSES :
+    $ sudo apt-get install mmdb-bin
+    $ apt-get install libmaxminddb-dev
+    $ mmdblookup --file /etc/nginx/geoip/geoip_country/GeoLite2-Country.mmdb --ip 192.168.0.6
+
+    https://dev.maxmind.com/geoip/legacy/codes/iso3166/
+
+
+    # Other Example :
+    $ vi nginx.conf
+     #GeoIP
+      geoip_country /usr/share/GeoIP/GeoIP.dat;
+      map $geoip_country_code $allow_visit {
+                default yes;
+                MA no;
+       }
+
+    $ cd conf.d
+    $ vi web.conf
+        if ($allow_visit = no) {
+                return 403;
+           }
+
+    + more example  -> https://docs.nginx.com/nginx/admin-guide/security-controls/controlling-access-by-geoip/
