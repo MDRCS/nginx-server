@@ -1449,3 +1449,106 @@
 
     #display cache recursively
     $ ls -lR /etc/nginx/cache/
+
+
+### - HTTP2
+
+    + HTTP2 require SSL so you should configure HTTPS before configuring HTTP2.
+
+    $ wget http://nginx.org/download/nginx-1.14.0.tar.gz
+    $ tar -xvf nginx-1.14.0.tar.gz
+    $ nginx -V
+
+         --conf-path=/etc/nginx/nginx.conf --add-module=../naxsi-0.56/naxsi_src/ --error-log-path=/var/log/nginx/error.log
+         --http-client-body-temp-path=/var/lib/nginx/body --http-fastcgi-temp-path=/var/lib/nginx/fastcgi
+         --http-log-path=/var/log/nginx/access.log --http-proxy-temp-path=/var/lib/nginx/proxy
+         --lock-path=/var/lock/nginx.lock --pid-path=/var/run/nginx.pid --user=www-data --group=www-data
+         --with-http_ssl_module --without-mail_pop3_module --without-mail_smtp_module --without-mail_imap_module
+         --without-http_uwsgi_module --without-http_scgi_module --prefix=/usr
+
+    $ ./configure --help | grep http_v2
+
+        --with-http_v2_module              enable ngx_http_v2_module
+
+    $ ./configure --conf-path=/etc/nginx/nginx.conf     \
+                  --add-module=../naxsi-0.56/naxsi_src/     \
+                  --error-log-path=/var/log/nginx/error.log     \
+                  --http-client-body-temp-path=/var/lib/nginx/body  \
+                  --http-fastcgi-temp-path=/var/lib/nginx/fastcgi   \
+                  --http-log-path=/var/log/nginx/access.log     \
+                  --http-proxy-temp-path=/var/lib/nginx/proxy   \
+                  --lock-path=/var/lock/nginx.lock  \
+                  --pid-path=/var/run/nginx.pid     \
+                  --user=www-data   \
+                  --group=www-data  \
+                  --with-http_ssl_module    \
+                  --without-mail_pop3_module    \
+                   --without-mail_smtp_module   \
+                    --without-mail_imap_module  \
+                    --without-http_uwsgi_module \
+                     --without-http_scgi_module \
+                      --prefix=/usr             \
+                        --with-http_v2_module
+
+    $ make
+    $ make install
+    $ systemctl restart nginx
+
+    $ /etc/nginx#
+    $ vi nginx.conf
+
+    add -> listen 443 ssl `http2`;
+
+    $ systemctl reload nginx
+
+    $ curl -I -L https://192.168.0.4
+
+
+### - HTTP2 | Server Push
+
+    # basicaly here we configured http2 request that if client request /demo.html push other files
+
+    $ vi nginx.conf
+
+    location = /demo.html {
+        http2_push /style.css;
+        http2_push /image1.jpg;
+        http2_push /image2.jpg;
+    }
+
+    $ apt-get install nghttp2-client
+    $ nghttp -ans https://192.168.0.4/index.html
+
+### DISABLE X-FRAME Clickjacking :
+add_header X-XSS-Potection "1; mode=block";
+
+    There are three settings for X-Frame-Options:
+
+    SAMEORIGIN: This setting will allow the page to be displayed in a frame on the same origin as the page itself.
+    DENY: This setting will prevent a page displaying in a frame or iframe.
+    ALLOW-FROM URI: This setting will allow a page to be displayed only on the specified origin.
+
+    # go to your local machine
+    $ add_header X-Frame-Options sameorigin always;
+    $ add_header X-Frame-Options deny;
+    $ add_header X-Frame-Options "ALLOW-FROM http://www.domain.com
+
+    # Disable ClickJacking
+
+    # cd /etc/nginx/conf.d
+    # vi web.conf
+    # add add_header X-Frame-Options sameorigin always;
+
+    # Test with this html file :
+
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Title</title>
+        </head>
+        <body>
+            <iframe src="http://192.168.0.6/"
+                    height="200" width="300"></iframe>
+        </body>
+        </html>
