@@ -1520,7 +1520,6 @@
     $ nghttp -ans https://192.168.0.4/index.html
 
 ### DISABLE X-FRAME Clickjacking :
-add_header X-XSS-Potection "1; mode=block";
 
     There are three settings for X-Frame-Options:
 
@@ -1552,3 +1551,90 @@ add_header X-XSS-Potection "1; mode=block";
                     height="200" width="300"></iframe>
         </body>
         </html>
+
+    # add_header X-XSS-Potection "1; mode=block";
+
+### GeoIP :
+
+    # Setup GeoIP
+
+    # downlaod GeoIP Country & City databases from :
+
+    -> https://www.maxmind.com/en/accounts/312431/geoip/downloads
+
+    $ scp -P 2222 -r GeoLite2-Country.tar.gz vagrant@127.0.0.1:.
+    $ sudo mv GeoLite2-Country.tar.gz  /etc/nginx/geoip
+    $ sudo mv GeoLite2-City.tar.gz  /etc/nginx/geoip
+    $ tar -zxvf GeoLite2-Country.tar.gz
+    $ mv GeoLite2-Country_20200519/ geoip_country/
+    $ tar -zxvf GeoLite2-Citlsy.tar.gz
+    $ mv GeoLite2-City_20200519 geoip_city/
+
+
+    $ apt-get install libgeoip-dev
+    $ nginx -V
+    # check weather there is a module --with-http_geoip_module
+    else
+
+        $ ./configure --with-cc-opt='-g -O2
+         -fPIE -fstack-protector-strong -Wformat -Werror=format-security \
+         -Wdate-time -D_FORTIFY_SOURCE=2' --with-ld-opt='-Wl,-Bsymbolic-functions \
+          -fPIE -pie -Wl,-z,relro -Wl,-z,now' --prefix=/usr/share/nginx --conf-path=/etc/nginx/nginx.conf \
+           --http-log-path=/var/log/nginx/access.log --error-log-path=/var/log/nginx/error.log \
+            --lock-path=/var/lock/nginx.lock --pid-path=/run/nginx.pid --http-client-body-temp-path=/var/lib/nginx/body \
+             --http-fastcgi-temp-path=/var/lib/nginx/fastcgi --http-proxy-temp-path=/var/lib/nginx/proxy \
+             --http-scgi-temp-path=/var/lib/nginx/scgi --http-uwsgi-temp-path=/var/lib/nginx/uwsgi --with-debug \
+              --with-pcre-jit --with-ipv6 --with-http_ssl_module --with-http_stub_status_module \
+               --with-http_realip_module --with-http_auth_request_module --with-http_addition_module \
+                --with-http_dav_module --with-http_geoip_module --with-http_gunzip_module \
+                 --with-http_gzip_static_module --with-http_image_filter_module \
+                  --with-http_v2_module --with-http_sub_module --with-http_xslt_module \
+                   --with-stream --with-stream_ssl_module --with-mail --with-mail_ssl_module \
+                    --with-threads /var/lib/nginx/body
+
+
+    $ systemctl reload nginx
+    $ download https://github.com/mbcc2006/GeoLiteCity-data
+    $ scp -P 2222 -r GeoLiteCity.dat vagrant@127.0.0.1:.
+    $ sudo mv GeoLiteCity.dat /usr/share/GeoIP/
+    $ cd /usr/share/GeoIP/ && ls
+    $ cd /etc/nginx/
+    $ vi nginx.conf
+    # add -> geoip_country /usr/share/GeoIP/GeoIP.dat ;
+          -> geoip_city /usr/share/GeoIP/GeoLiteCity.dat;
+
+    $ cd /etc/nginx/conf.d
+    $ vi web.conf
+        server {
+            listen 80;
+
+            location / {
+                root /var/www/;
+                index index.html;
+            }
+
+            location /geo_country {
+                return 200 "Visiting from : $geoip_country_name";
+            }
+        }
+
+    $ systemctl reload nginx
+    $ curl http://192.168.0.5/geo_country
+
+### Video Content :
+
+    $ vi web.conf
+
+    location ~ \.mp4$ {
+
+        root /var/www/;
+        mp4;
+        mp4_buffer_size 4M;
+        mp4_buffer_buffer_size 10M;
+
+    }
+
+    $ cd /var/www/
+    $ wget https://www.youtube.com/watch?v=lyyVCym8Sa0
+    $ mv lyyVCym8Sa0 video.mp4
+    $ systemctl reload nginx
