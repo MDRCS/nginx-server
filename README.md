@@ -2779,3 +2779,106 @@
     This is called aggregating logs. Aggregating logs allows you to view logs together in one place without having to jump from server to server
     and mentally stitch together logfiles by timestamp. A com‐ mon log aggregation stack is ElasticSearch, Logstash, and Kibana, also known as the ELK Stack.
     NGINX makes streaming these logs to your Syslog listener easy with the access_log and error_log direc‐ tives.
+
+
+    + Performance Tuning :
+
+    30.2 Keeping Connections Open to Clients
+
+    + Problem :
+    You need to increase the number of requests allowed to be made over a single connection from clients and the amount of time idle connections are allowed to persist.
+    + Solution :
+
+    Use the keepalive_requests and keepalive_timeout directives to alter the number of requests that can be made over a single connec‐ tion and the time idle connections can stay open:
+        http {
+            keepalive_requests 320;
+            keepalive_timeout 300s;
+            ...
+    }
+
+    The keepalive_requests directive defaults to 100, and the
+    keepalive_timeout directive defaults to 75 seconds.
+
+
+    30.3 Keeping Connections Open Upstream
+
+    + Problem :
+    You need to keep connections open to upstream servers for reuse to enhance your performance.
+
+    + Solution :
+    Use the keepalive directive in the upstream context to keep con‐ nections open to upstream servers for reuse:
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        upstream backend {
+          server 10.0.0.42;
+          server 10.0.2.56;
+          keepalive 32;
+        }
+
+    The keepalive directive in the upstream context activates a cache of connections that stay open for each NGINX worker.
+    The directive denotes the maximum number of idle connections to keep open per worker. The proxy modules directives
+    used above the upstream block are necessary for the keepalive directive to function properly
+
+    Discussion
+    You would want to keep connections open to upstream servers to save the amount of time it takes to initiate the connection,
+    and the worker process can instead move directly to making a request over an idle connection. It’s important
+    to note that the number of open connections can exceed the number of connections specified in the keepalive directive
+    as open connections and idle connections are not the same. The number of keepalive connections should be kept small enough
+    to allow for other incoming connections to your upstream server. This small NGINX tuning trick can save some cycles and enhance your performance.
+
+    30.4 Buffering Responses
+
+    + Problem :
+    You need to buffer responses between upstream servers and clients in memory to avoid writing responses to temporary files.
+
+    + Solution :
+    Tune proxy buffer settings to allow NGINX the memory to buffer response bodies:
+        server {
+            proxy_buffering on;
+            proxy_buffer_size 8k;
+            proxy_buffers 8 32k;
+            proxy_busy_buffer_size 64k;
+            ...
+    }
+
+    The proxy_buffering directive is either on or off; by default it’s on.
+    The proxy_buffer_size denotes the size of a buffer used for read‐ ing the first part of the response from the proxied server
+    and defaults to either 4k or 8k, depending on the platform. The proxy_buffers directive takes two parameters: the number
+    of buf‐ fers and the size of the buffers. By default the proxy_buffers direc‐ tive is set to a number of 8 buffers of
+    size either 4k or 8k, depending on the platform. The proxy_busy_buffer_size directive limits the size of buffers that can be busy,
+    sending a response to the client while the response is not fully read. The busy buffer size defaults to double the size of a proxy buffer or the buffer size.
+
+    Discussion
+    Proxy buffers can greatly enhance your proxy performance, depend‐ ing on the typical size of your response bodies.
+    Tuning these settings can have adverse effects and should be done by observing the aver‐ age body size returned,
+    and thoroughly and repeatedly testing. Extremely large buffers set when they’re not necessary can eat up the memory
+    of your NGINX box. You can set these settings for specific locations that are known to return large response bodies
+    for optimal performance.
+
+
+    30.5 Buffering Access Logs
+
+    + Problem :
+    You need to buffer logs to reduce the opportunity of blocks to the NGINX worker process when the system is under load.
+
+    + Solution :
+
+    Set the buffer size and flush time of your access logs:
+        http {
+            access_log /var/log/nginx/access.log main buffer=32k
+            flush=1m;
+           }
+
+    The buffer parameter of the access_log directive denotes the size of a memory buffer that can be filled with
+    log data before being written to disk. The flush parameter of the access_log directive sets the longest amount
+    of time a log can remain in a buffer before being written to disk.
+
+    Discussion
+    Buffering log data into memory may be a small step toward optimi‐ zation. However, for heavily requested sites and applications,
+    this can make a meaningful adjustment to the usage of the disk and CPU. When using the buffer parameter to the access_log direc‐ tive,
+    logs will be written out to disk if the next log entry does not fit into the buffer. If using the flush parameter in conjunction with the buffer parameter,
+    logs will be written to disk when the data in the buffer is older than the time specified. When buffering logs in this way, when tailing the log, you may
+    see delays up to the amount of time specified by the flush parameter.
+
+
