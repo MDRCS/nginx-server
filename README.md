@@ -2660,3 +2660,122 @@
     If a form post containing sensitive information is sent over HTTP, the HTTPS redirect from NGINX won’t save you;
     the damage is done. This opt- in security enhancement informs the browser to never make an HTTP request,
     therefore the request is never sent unencrypted.
+
+    28.3 Finding the Original Client Problem
+    You need to find the original client IP address because there are proxies in front of the NGINX server.
+
+    Solution
+    Use the geoip_proxy directive to define your proxy IP address range and
+    the geoip_proxy_recursive directive to look for the original IP:
+
+    load_module "/usr/lib64/nginx/modules/ngx_http_geoip_module.so";
+        http {
+            geoip_country /etc/nginx/geoip/GeoIP.dat;
+            geoip_city /etc/nginx/geoip/GeoLiteCity.dat;
+            geoip_proxy 10.0.16.0/26;
+            geoip_proxy_recursive on;
+        ...
+        }
+
+    The geoip_proxy directive defines a CIDR range in which our proxy servers live and instructs
+    NGINX to utilize the X-Forwarded- For header to find the client IP address.
+    The geoip_proxy_recursive directive instructs NGINX to recursively look through the X-Forwarded-For header for the last client IP known.
+
+    Discussion
+    You may find that if you’re using a proxy in front of NGINX, NGINX will pick up the proxy’s IP address rather than the client’s.
+    For this you can use the geoip_proxy directive to instruct NGINX to use the X-Forwarded-For header when connections are opened from a given range.
+    The geoip_proxy directive takes an address or a CIDR range. When there are multiple proxies passing traffic in front of NGINX,
+    you can use the geoip_proxy_recursive directive to recursively search through X-Forwarded-For addresses to find the originating client.
+    You will want to use something like this when uti‐ lizing load balancers such as the AWS ELB, Google’s load balancer, or Azure’s load balancer in front of NGINX.
+
+    + Debugging and Troubleshooting with Access Logs, Error Logs, and Request Tracing
+
+    29.1 Configuring Access Logs
+
+    + Problem :
+    You need to configure access log formats to add embedded variables to your request logs.
+
+    + Solution :
+    Configure an access log format:
+
+     http {
+        log_format  geoproxy
+                    '[$time_local] $remote_addr '
+                    '$realip_remote_addr $remote_user '
+                    '$request_method $server_protocol '
+                    '$scheme $server_name $uri $status '
+                    '$request_time $body_bytes_sent '
+                    '$geoip_city_country_code3 $geoip_region '
+                    '"$geoip_city" $http_x_forwarded_for '
+                    '$upstream_status $upstream_response_time '
+                    '"$http_referer" "$http_user_agent"';
+    ... }
+
+    This log format configuration is named geoproxy and uses a num‐ ber of embedded variables to demonstrate the power of NGINX log‐ ging.
+    This configuration shows the local time on the server when the request was made, the IP address that opened the connection,
+    and the IP of the client as NGINX understands it per geoip_proxy or realip_header instructions. $remote_user shows
+    the username of the user authenticated by basic authentication, followed by the request method and protocol,
+    as well as the scheme, such as HTTP or HTTPS. The server name match is logged as well as the request URI
+    and the return status code. Statistics logged include the pro‐ cessing time in milliseconds and the size of the body sent to
+    the cli‐ ent. Information about the country, region, and city are logged. The HTTP header X-Forwarded-For is
+    included to show if the request is being forwarded by another proxy. The upstream module enables some embedded
+    variables that we’ve used that show the status returned from the upstream server and how long the upstream
+    request takes to return. Lastly we’ve logged some information about where the client was referred from and what browser
+    the client is using. The log_format directive is only valid within the HTTP con‐ text.
+    This log configuration renders a log entry that looks like the follow‐ ing:
+
+    [25/Nov/2016:16:20:42 +0000] 10.0.1.16 192.168.0.122 Derek
+    GET HTTP/1.1 http www.example.com / 200 0.001 370 USA MI
+    "Ann Arbor" - 200 0.001 "-" "curl/7.47.0"
+
+    To use this log format, use the access_log directive, providing a logfile path and the format name geoproxy as parameters:
+
+     server {
+        access_log  /var/log/nginx/access.log  geoproxy;
+        ...
+    }
+
+    The access_log directive takes a logfile path and the format name as parameters. This directive is valid in many contexts
+    and in each context can have a different log path and or log format.
+
+    Discussion
+    The log module in NGINX allows you to configure log formats for many different scenarios to log to numerous logfiles as you see fit.
+    You may find it useful to configure a different log format for each context, where you use different modules and employ those mod‐ ules
+    embedded variables, or a single, catchall format that provides all necessary information you could ever want.
+    It’s also possible to structure format to log in JSON or XML. These logs will aid you in understanding your traffic patterns,
+    client usage, who your clients are, and where they’re coming from. Access logs can also aid you in finding lag in
+    responses and issues with upstream servers or particu‐ lar URIs. Access logs can be used to parse and play back traffic patterns
+    in test environments to mimic real user interaction. There’s limitless possibility to logs when troubleshooting, debugging,
+    or analyzing your application or market.
+
+
+    29.2 Configuring Error Logs
+
+    + Problem :
+    You need to configure error logging to better understand issues with your NGINX server.
+
+    + Solution :
+    Use the error_log directive to define the log path and the log level: error_log /var/log/nginx/error.log warn;
+    The error_log directive requires a path; however, the log level is optional. This directive is valid in every context except for if state‐ ments.
+    The log levels available are debug, info, notice, warn, error, crit, alert, or emerg. The order in which these log levels were introduced is also
+    the order of severity from least to most. The debug log level is only available if NGINX is configured with the -- with-debug flag.
+
+
+    29.3 Forwarding to Syslog
+
+    + Problem :
+
+    You need to forward your logs to a Syslog listener to aggregate logs to a centralized service.
+
+    + Solution :
+    Use the access_log and error_log directives to send your logs to a Syslog listener:
+        error_log syslog:server=10.0.1.42 debug;
+        access_log syslog:server=10.0.1.42,tag=nginx,severity=info
+          geoproxy;
+
+    Discussion
+    Syslog is a standard protocol for sending log messages and collect‐ ing those logs on a single server or collection of servers.
+    Sending logs to a centralized location helps in debugging when you’ve got multiple instances of the same service running on multiple hosts.
+    This is called aggregating logs. Aggregating logs allows you to view logs together in one place without having to jump from server to server
+    and mentally stitch together logfiles by timestamp. A com‐ mon log aggregation stack is ElasticSearch, Logstash, and Kibana, also known as the ELK Stack.
+    NGINX makes streaming these logs to your Syslog listener easy with the access_log and error_log direc‐ tives.
