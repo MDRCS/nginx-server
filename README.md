@@ -1762,7 +1762,9 @@
     Use the sticky cookie directive to instruct NGINX Plus to create and track a cookie:
 
         upstream backend {
-            server backend1.example.com; server backend2.example.com; sticky cookie
+            server backend1.example.com;
+            server backend2.example.com;
+            sticky cookie
                            affinity
                            expires=1h
                            domain=.example.com
@@ -1808,14 +1810,17 @@
        are typically defaults set within the application or the application server configuration.
 
 
-    2.4 Connection Draining Problem
+    2.4 Connection Draining
+
+        Problem
         You need to gracefully remove servers for maintenance or other rea‐ sons while still serving sessions.
+
         Solution
         Use the drain parameter through the NGINX Plus API,
 
         to instruct NGINX to stop sending new connections that are not already tracked:
 
-        $ curl 'http://localhost/upstream_conf\ ?upstream=backend&id=1&drain=1'
+        $ curl 'http://localhost/upstream_conf\?upstream=backend&id=1&drain=1'
 
     Discussion
     When session state is stored locally to a server, connections and per‐ sistent sessions must be drained before
@@ -1868,10 +1873,14 @@
     overwhelmed by connections as soon as it starts. This feature takes effect when a server that has failed health
     checks begins to pass again and re-enters the load-balancing pool.
 
-    3.3 TCP Health Checks Problem
+    3.3 TCP Health Checks
+
+    + Problem :
     You need to check your upstream TCP server for health and remove unhealthy servers from the pool.
-    Solution
+
+    + Solution :
     Use the health_check directive in the server block for an active health check:
+
     stream {
         server {
                 listen       3306;
@@ -1885,20 +1894,26 @@
     NGINX performs the check every 10 seconds. The server will only be considered healthy after passing two health checks.
 
 
-    3.4 HTTP Health Checks Problem
+    3.4 HTTP Health Checks
+
+    + Problem :
     You need to actively check your upstream HTTP servers for health.
-    Solution
+
+    + Solution :
+
     Use the health_check directive in a location block:
+
     http {
             server {
                     ...
 
         location / {
-            proxy_pass http://backend; health_check interval=2s
-            fails=2
-            passes=5
-            uri=/
-            match=welcome;
+            proxy_pass http://backend;
+            health_check interval=2s
+                            fails=2
+                            passes=5
+                            uri=/
+                            match=welcome;
         }
     }
         # status is 200, content type is "text/html", # and body contains "Welcome to nginx!"
@@ -1917,5 +1932,46 @@
     The response from the upstream server must match the defined match block, which defines the status code as 200,
     the header Content-Type value as 'text/ html', and the string "Welcome to nginx!"
     in the response body.
+
+    # + High-Availability Deployment Modes :
+
+    4.1 NGINX HA Mode
+
+    + Problem :
+    You need a highly available load-balancing solution.
+
+    + Solution :
+    Use NGINX Plus’s HA mode with keepalived by installing the nginx-ha-keepalived
+    package from the NGINX Plus repository.
+
+    Discussion
+    The NGINX Plus repository includes a package called nginx-ha- keepalived. This package, based on keepalived,
+    manages a virtual IP address exposed to the client. Another process is run on the NGINX server
+    that ensures that NGINX Plus and the keepalived process are running. Keepalived is a process that
+    utilizes the Virtual Router Redundancy Protocol (VRRP), sending small messages often referred to
+    as heartbeats to the backup server. If the backup server does not receive the heartbeat for
+    three consecutive periods, the backup server initiates the failover, moving the virtual IP
+    address to itself and becoming the master. The failover capabilities of nginx- ha-keepalived can
+    be configured to identify custom failure situations.
+
+    4.2 Load-Balancing Load Balancers with DNS
+
+    + Problem :
+        You need to distribute load between two or more NGINX servers.
+
+    + Solution :
+        Use DNS to round robin across NGINX servers by adding multiple IP addresses to a DNS A record.
+
+    Discussion
+    When running multiple load balancers, you can distribute load via DNS. The A record allows for multiple
+    IP addresses to be listed under a single, fully qualified domain name. DNS will automatically round robin
+    across all the IPs listed. DNS also offers weighted round robin with weighted records, which works in
+    the same way as weighted round robin in NGINX. These techniques work great. However,
+    a pitfall can be removing the record when an NGINX server encounters a failure. There are DNS
+    providers—Amazon Route53 for one, and Dyn DNS for another— that offer health checks and failover
+    with their DNS offering, which alleviates these issues. If using DNS to load balance over NGINX,
+    when an NGINX server is marked for removal, it’s best to follow the same protocols that NGINX
+    does when removing an upstream server. First, stop sending new connections to it by removing
+    its IP from the DNS record, then allow connections to drain before stop‐ ping or shutting down the service.
 
 
