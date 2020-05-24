@@ -2162,3 +2162,59 @@
     This configuration allows the downstream client to download for 15 seconds before applying a bitrate limit.
     After 15 seconds, the client is allowed to download media at a rate of 120% of the bitrate, which enables
     the client to always download faster than they play.
+
+    + Advanced Activity Monitoring :
+    7.1 NGINX Traffic Monitoring
+
+    + Problem :
+      You require in-depth metrics about the traffic flowing through your system.
+
+    + Solution :
+      Utilize NGINX Plus’s real-time activity monitoring dashboard:
+      server {
+            listen 8080;
+            root /usr/share/nginx/html;
+            # Redirect requests for / to /status.html
+            location = / {
+            return 301 /status.html;
+            }
+
+            location = /status.html { }
+            # Everything beginning with /status
+            # (except for /status.html) is
+            # processed by the status handler
+            location /status {
+                    status;
+            }
+        }
+
+    - The NGINX Plus configuration serves the NGINX Plus status moni‐ toring dashboard.
+      This configuration sets up an HTTP server to lis‐ ten on port 8080, serve content
+      out of the /usr/share/nginx/html directory, and redirect / requests to /status.html.
+      All other /status requests will be served by the /status location that serves the NGINX Plus status API.
+
+    + check dashboard demo -> https://demo.nginx.com/dashboard.html#resolvers
+
+    7.2 The JSON Feed
+
+    + Problem :
+    You need API access to the detail metrics provided by the NGINX Plus status dashboard.
+
+    + Solution :
+    Utilize the JSON feed provided by NGINX Plus’s status API:
+
+    $ curl "demo.nginx.com/status/upstreams\ /demo-backend/peers/0/responses"
+        {
+             "1xx":0,
+        "2xx":199237,
+        "3xx":7404,
+        "4xx":104415,
+        "5xx":19574,
+        "total":330630
+        }
+
+    The curl call requests a JSON feed from the NGINX Plus status API for information
+    about an upstream HTTP server pool, and in par‐ ticular about the first server in the pool’s responses.
+
+    - This JSON feed enables you to feed the monitoring data into any other number of systems you may be utilizing for monitor‐ ing,
+      such as Graphite, Datadog, and Splunk.
