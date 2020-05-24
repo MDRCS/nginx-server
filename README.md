@@ -2368,3 +2368,85 @@
        for content being served from this server to also be used on pages of origins that match this header.
        The preflight request can be cached on the client for 1,728,000 sec‐ onds, or 20 days.
 
+    + Limiting Use :
+
+    Limiting use or abuse of your system can be important for throttling heavy users or stopping attacks. NGINX has multiple modules built in to help control the use
+    of your applications. This chapter focuses on limiting use and abuse, the number of connections, the rate at which requests are served, and the amount of bandwidth used.
+    It’s important to differentiate between connections and requests: con‐ nections (TCP connections) are the transport layer on which requests are made and therefore are not
+    the same thing. A browser may open multiple connections to a server to make multiple requests. However, in HTTP/1 and HTTP/1.1, requests can only be made one at a time on
+    a single connection; whereas in HTTP/2, multiple requests can be made in parallel over a single TCP connec‐ tion. This chapter will help you restrict usage of your service
+    and mitigate abuse.
+
+    12.1 Limiting Connections
+
+    + Problem :
+    You need to limit the number of connections based on a predefined key, such as the client’s IP address.
+
+    + Solution :
+        Construct a shared memory zone to hold connection metrics, and use the limit_conn directive to limit open connections:
+        http {
+        limit_conn_zone $binary_remote_addr zone=limitbyaddr:10m; limit_conn_status 429;
+        ...
+        server {
+                    ...
+                        limit_conn limitbyaddr 40;
+                    ...
+            }
+        }
+
+    + This configuration creates a shared memory zone named limit byaddr. The predefined key used is the client’s IP address in binary form.
+      The size of the shared memory zone is set to 10 mega‐ bytes. The limit_conn directive takes two parameters: a limit_conn_zone name,
+      and the number of connections allowed. The limit_conn_status sets the response when the connections are limited to a status of 429,
+      indicating too many requests. The limit_conn and limit_conn_status directives are valid in the HTTP, server, and location context.
+
+
+
+    12.2 Limiting Rate
+
+        + Problem :
+        You need to limit the rate of requests by predefined key, such as the client’s IP address.
+
+        + Solution :
+        Utilize the rate-limiting module to limit the rate of requests:
+        http {
+            limit_req_zone $binary_remote_addr
+            zone=limitbyaddr:10m rate=1r/s;
+            limit_req_status 429;
+            ...
+            server {
+                ...
+                limit_req zone=limitbyaddr burst=10 nodelay; ...
+            }
+        }
+        This example configuration creates a shared memory zone named limitbyaddr.
+        The predefined key used is the client’s IP address in binary form.
+        The size of the shared memory zone is set to 10 mega‐ bytes. The zone sets the rate with a keyword argument.
+        The limit_req directive takes two optional keyword arguments: zone and burst.
+        zone is required to instruct the directive on which shared memory request limit zone to use.
+        When the request rate for a given zone is exceeded, requests are delayed until their maximum burst size is reached,
+        denoted by the burst keyword argument. The burst keyword argument defaults to zero.
+        limit_req also takes a third optional parameter, nodelay. This parameter enables the client to use its burst without
+        delay before being limited. limit_req_status sets the status returned to the client to a particular HTTP status code;
+        the default is 503. limit_req_status and limit_req are valid in the context of HTTP, server, and location.
+        limit_req_zone is only valid in the HTTP context.
+
+        12.3 Limiting Bandwidth
+
+        + Problem :
+        You need to limit download bandwidths per client for your assets.
+        + Solution :
+        Utilize NGINX’s limit_rate and limit_rate_after directives to limit the rate of response to a client:
+
+        location /download/ {
+
+            limit_rate_after 10m;
+            limit_rate 1m;
+        }
+
+
+        The configuration of this location block specifies that for URIs with the prefix download,
+        the rate at which the response will be served to the client will be limited after 10 megabytes
+        to a rate of 1 megabyte per second. The bandwidth limit is per connection, so you may want to
+        institute a connection limit as well as a bandwidth limit where applicable.
+
+
