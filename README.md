@@ -2497,3 +2497,123 @@
     These proxy directives set specific SSL rules for NGINX to obey. The configured directives ensure that NGINX verifies that the certificate and chain on the upstream service is valid up to two certificates deep.
     The proxy_ssl_protocols directive specifies that NGINX will only use TLS version 1.2. By default NGINX does not verify upstream certificates and accepts all TLS versions.
 
+    + ModSecurity Web Application Firewall
+    -> The plug-and-play ModSe‐ curity 3.0 module for NGINX is only available with an NGINX Plus subscription.
+
+    19.1 Installing ModSecurity for NGINX Plus
+
+    + Problem :
+    You need to install the ModSecurity module for NGINX Plus.
+
+    + Solution :
+    Install the module from the NGINX Plus repository. The package name is nginx-plus-module-modsecurity.
+    On an Ubuntu-based system, you can install NGINX Plus and the ModSecurity module through the advanced packaging tool,
+    also known as apt-get:
+
+    $ apt-get update
+    $ apt-get install nginx-plus
+    $ apt-get install nginx-plus-module-modsecurity
+
+
+    19.2 Configuring ModSecurity in NGINX Plus
+
+    + Problem :
+    You need to configure NGINX Plus to use the ModSecurity module.
+
+    + Solution :
+    Enable the dynamic module in your NGINX Plus configuration, and use the modsecurity_rules_file directive to point to a ModSecur‐ ity rule file:
+
+    load_module modules/ngx_http_modsecurity.so;
+
+    The load_module directive is applicable in the main context, which means that this directive is to be used before opening the HTTP or Stream blocks.
+    Turn on ModSecurity and use a particular rule set:
+
+    modsecurity on;
+    location / {
+        proxy_pass http://backend;
+        modsecurity_rules_file rule-set-file;
+    }
+
+    The modsecurity directive turns on the module for the given con‐ text when passed the on parameter.
+    The modsecurity_rules_file directive instructs NGINX Plus to use a particular ModSecurity rule set.
+
+    Discussion
+    The rules for ModSecurity can prevent common exploits of web servers and applications. ModSecurity is known to be
+    able to pre‐ vent application-layer attacks such as HTTP violations, SQL injec‐ tion, cross-site scripting,
+    distributed-denial-of-service, and remote and local file-inclusion attacks. With ModSecurity, you’re able to subscribe
+    to real-time blacklists of malicious user IPs to help block issues before your services are affected. The ModSecurity
+    module also enables detailed logging to help identify new patterns and anomalies.
+
+    19.3 Installing ModSecurity from Source for a Web Application Firewall
+
+    + Problem :
+    You need to run a web application firewall with NGINX using Mod‐ Security and a set of ModSecurity rules on a CentOS or RHEL-based system.
+
+    + Solution :
+
+    Compile ModSecurity and NGINX from source and configure NGINX to use the ModSecurity module.
+    First update security and install prerequisites:
+    $ yum --security update -y && \ yum -y install automake \ autoconf \
+                                                                curl \
+                                                                curl-devel \
+                                                                gcc \
+                                                                gcc-c++ \
+                                                                httpd-devel \
+                                                                libxml2 \
+                                                                libxml2-devel \ make \
+                                                                openssl \
+                                                                openssl-devel \
+                                                                perl \
+                                                                wget
+    Next, download and install PERL 5 regular expression pattern matching:
+
+    $cd/opt&&\
+    wget http://ftp.exim.org/pub/pcre/pcre-8.39.tar.gz && \ tar -zxf pcre-8.39.tar.gz && \
+    cd pcre-8.39 && \
+    ./configure && \
+    make && \
+    make install
+    Download and install zlib from source:
+    $cd/opt&&\
+    wget http://zlib.net/zlib-1.2.8.tar.gz && \ tar -zxf zlib-1.2.8.tar.gz && \
+    cd zlib-1.2.8 && \
+    ./configure && \
+    make && \
+    make install
+    Download and install ModSecurity from source:
+    $cd/opt&&\ wget \
+    https://www.modsecurity.org/tarball/2.9.1/modsecurity-2.9.1.\ tar.gz&& \
+    tar -zxf modsecurity-2.9.1.tar.gz && \
+    cd modsecurity-2.9.1 && \
+    ./configure --enable-standalone-module && \ make
+    Download and install NGINX from source and include any modules you may need with the configure script. Our focus here is the Mod‐ Security module:
+    $cd/opt&&\
+    wget http://nginx.org/download/nginx-1.11.4.tar.gz && \ tar zxf nginx-1.11.4.tar.gz && \
+    cd nginx-1.11.4 && \
+    ./configure \
+    --sbin-path=/usr/local/nginx/nginx \ --conf-path=/etc/nginx/nginx.conf \ --pid-path=/usr/local/nginx/nginx.pid \ --with-pcre=../pcre-8.39 \ --with-zlib=../zlib-1.2.8 \
+    --with-http_ssl_module \
+    --with-stream \
+    --with-http_ssl_module \ --with-http_secure_link_module \ --add-module=../modsecurity-2.9.1/nginx/modsecurity \
+    &&\
+    make && \
+    make install && \
+    ln -s /usr/local/nginx/nginx /usr/sbin/nginx
+    This will yield NGINX compiled from source with the ModSecurity version 2.9.1 module installed. From here we are able to use the Mod SecurityEnabled and ModSecurityConfig directives in our config‐ urations:
+
+    server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        server_name _;
+        location / {
+                  ModSecurityEnabled on;
+                  ModSecurityConfig modsecurity.conf;
+                }
+    }
+
+    This configuration for an NGINX server turns on ModSecurity for the location / and uses a ModSecurity configuration file located at the base of the NGINX configuration.
+
+    Discussion
+    This section compiles NGINX from source with the ModSecurity for NGINX. It’s advised when compiling NGINX from source to always check that you’re using
+    the latest stable packages available. With the preceding example, you can use the open source version of NGINX along with ModSecurity to build your own open source web application firewall.
+
