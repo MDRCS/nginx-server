@@ -1976,3 +1976,119 @@
 
 
     + Massively Scalable Content Caching
+    5.1 Caching Zones
+
+    + Problem :
+    You need to cache content and need to define where the cache is stored.
+
+    + Solution :
+    Use the proxy_cache_path directive to define shared memory cache zones and a location for the content:
+
+        proxy_cache_path /var/nginx/cache keys_zone=CACHE:60m
+                             levels=1:2
+                             inactive=3h
+                             max_size=20g;
+        proxy_cache CACHE;
+
+
+    The cache definition example creates a directory for cached respon‐ ses on the filesystem
+    at /var/nginx/cache and creates a shared mem‐ ory space named CACHE with 60 megabytes of memory.
+    This example sets the directory structure levels, defines the release of cached responses after
+    they have not been requested in 3 hours, and defines a maximum size of the cache of 20 gigabytes.
+    The proxy_cache directive informs a particular context to use the cache zone. The proxy_cache_path
+    is valid in the HTTP context, and the proxy_cache directive is valid in the HTTP, server, and location contexts.
+
+    5.2 Caching Hash Keys
+
+    + Problem :
+    You need to control how your content is cached and looked up.
+
+    + Solution :
+    Use the proxy_cache_key directive, along with variables to define what constitutes a cache hit or miss:
+
+    proxy_cache_key "$host$request_uri $cookie_user";
+
+    This cache hash key will instruct NGINX to cache pages based on the host and URI being requested,
+    as well as a cookie that defines the user. With this you can cache dynamic pages without serving
+    content that was generated for a different user.
+
+    -> you can cache dynamic content and map it with a cookie for each user, in that time we have content specific to each user.
+
+    Discussion
+    The default proxy_cache_key is "$scheme$proxy_host $request_uri". This default will fit most use cases. The variables used include the scheme,
+    HTTP or HTTPS, the proxy_host, where the request is being sent, and the request URI. All together, this reflects the URL that NGINX is proxying
+    the request to. You may find that there are many other factors that define a unique request per application, such as request arguments, headers,
+    session identifi‐ ers, and so on, to which you’ll want to create your own hash key.1
+    Selecting a good hash key is very important and should be thought through with understanding of the application. Selecting a cache key for static
+    content is typically pretty straightforward; using the host‐ name and URI will suffice. Selecting a cache key for fairly dynamic content like pages
+    for a dashboard application requires more knowl‐ edge around how users interact with the application and the degree of variance between user experiences.
+    For security concerns you may not want to present cached data from one user to another without fully understanding the context.
+    The proxy_cache_key directive configures the string to be hashed for the cache key. The
+
+
+    5.3 Cache Bypass
+
+    + Problem :
+    You need the ability to bypass the caching.
+
+    + Solution :
+    Use the proxy_cache_bypass directive with a nonempty or nonzero value.
+    One way to do this is by setting a variable within location blocks
+    that you do not want cached to equal 1:
+
+    proxy_cache_bypass $http_cache_bypass;
+
+    The configuration tells NGINX to bypass the cache if the HTTP
+    request header named cache_bypass is set to any value that is not 0.
+
+    + use case :
+    For many reasons, you may want to bypass the cache. One impor‐ tant reason is troubleshooting and debugging.
+    Reproducing issues can be hard if you’re consistently pulling cached pages or if your cache key is specific
+    to a user identifier. Having the ability to bypass the cache is vital. Options include but are not limited to
+    bypassing cache when a particular cookie, header, or request argument is set. You can also turn off cache
+    completely for a given context such as a location block by setting proxy_cache off;.
+
+
+    5.4 Cache Performance
+
+    + Problem :
+    You need to increase performance by caching on the client side.
+
+    + Solution :
+    Use client-side cache control headers:
+
+    location ~* \.(css|js)$ {
+        expires 1y;
+        add_header Cache-Control "public";
+    }
+
+    This location block specifies that the client can cache the content of CSS and JavaScript files.
+    The expires directive instructs the client that their cached resource will no longer be valid after one year.
+    The add_header directive adds the HTTP response header Cache- Control to the response, with a value of public,
+    which allows any caching server along the way to cache the resource. If we specify pri‐ vate, only the client
+    is allowed to cache the value.
+
+    Discussion
+    Cache performance has to do with many variables, disk speed being high on the list. There are many things within the NGINX
+    configu‐ ration you can do to assist with cache performance. One option is to set headers of the response
+    in such a way that the client actually caches the response and does not make the request to NGINX at all, but simply serves
+    it from its own cache.
+
+
+    5.5 Purging Problem
+    You need to invalidate an object from the cache.
+    Solution
+    Use NGINX Plus’s purge feature, the proxy_cache_purge directive, and a nonempty or zero value variable:
+
+    map $request_method $purge_method {
+        PURGE 1;
+        default 0;
+    }
+
+    server { ...
+            location / {
+                ...
+                proxy_cache_purge $purge_method;
+            }
+    }
+
