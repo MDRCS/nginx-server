@@ -2092,3 +2092,73 @@
             }
     }
 
+    + Sophisticated Media Streaming
+        6.1 Serving MP4 and FLV
+        - Problem :
+        You need to stream digital media, originating in MPEG-4 (MP4) or Flash Video (FLV).
+        - Solution :
+        Designate an HTTP location block as .mp4 or .flv. NGINX will stream the media using progressive downloads
+        or HTTP pseudostreaming and support seeking:
+
+            http {
+                server {
+                ...
+                location /videos/ {
+                    mp4;
+                }
+
+                location ~ \.flv$ {
+                    flv;
+                }
+            }
+        }
+
+    - The example location block tells NGINX that files in the videos directory are of MP4 format type and can
+       be streamed with progres‐ sive download support. The second location block instructs NGINX that any files ending in .flv
+       are of Flash Video format and can be streamed with HTTP pseudostreaming support.
+
+    Discussion
+    Streaming video or audio files in NGINX is as simple as a single directive. Progressive download enables the client to initiate
+    play‐ back of the media before the file has finished downloading.
+
+    6.2 Streaming with HLS
+
+    + Problem :
+    You need to support HTTP live streaming (HLS) for H.264/AAC- encoded content packaged in MP4 files.
+
+    + Solution :
+    Utilize NGINX Plus’s HLS module with real-time segmentation, packetization, and multiplexing,
+    with control over fragmentation buffering and more, like forwarding HLS arguments:
+
+        location /hls/ {
+                hls; # Use the HLS handler to manage requests
+                # Serve content from the following location
+                alias /var/www/video;
+                # HLS parameters
+                hls_fragment            4s;
+                hls_buffers         10 10m;
+                hls_mp4_buffer_size     1m;
+                hls_mp4_max_buffer_size 5m;
+        }
+
+    + The location block demonstrated directs NGINX to stream HLS media out of the /var/www/video directory,
+      fragmenting the media into four-second segments. The number of HLS buffers is set to 10 with a size of 10 megabytes.
+      The initial MP4 buffer size is set to one megabyte with a maximum of five megabytes.
+
+    6.4 Bandwidth Limits
+
+    + Problem :
+    You need to limit bandwidth to downstream media streaming cli‐ ents without impacting the viewing experience.
+
+    + Solution :
+    Utilize NGINX Plus’s bitrate limiting support for MP4 media files:
+
+    location /video/ {
+        mp4;
+        mp4_limit_rate_after 15s;
+        mp4_limit_rate 1.2;
+    }
+
+    This configuration allows the downstream client to download for 15 seconds before applying a bitrate limit.
+    After 15 seconds, the client is allowed to download media at a rate of 120% of the bitrate, which enables
+    the client to always download faster than they play.
