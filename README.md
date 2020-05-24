@@ -1638,3 +1638,108 @@
     $ wget https://www.youtube.com/watch?v=lyyVCym8Sa0
     $ mv lyyVCym8Sa0 video.mp4
     $ systemctl reload nginx
+
+
+### Advanced NGINX Recipes :
+
+    1.2 TCP Load Balancing
+
+    + Problem :
+    You need to distribute load between two or more TCP servers.
+
+    + Solution :
+    Use NGINX’s stream module to load balance over TCP servers using the upstream block:
+
+        stream {
+            upstream mysql_read {
+                server read1.example.com:3306 weight=5;
+                server read2.example.com:3306;
+                server 10.10.12.34:3306 backup;
+            }
+
+            server {
+                listen 3306;
+                proxy_pass mysql_read;
+            }
+        }
+
+    + The server block in this example instructs NGINX to listen on TCP port 3306 and balance
+      load between two MySQL database read rep‐ licas, and lists another as a backup that will
+      be passed traffic if the primaries are down.
+
+
+    # + Load Balancing Algorithms :
+    - Round robin :
+    The default load-balancing method, which distributes requests in order of the list of servers
+    in the upstream pool. Weight can be taken into consideration for a weighted round robin,
+    which could be used if the capacity of the upstream servers varies.
+    The higher the integer value for the weight, the more favored the server will be in the round robin.
+    The algorithm behind weight is simply statistical probability of a weighted average.
+    Round robin is the default load-balancing algorithm and is used if no other algorithm is specified.
+
+    - Least connections :
+    Another load-balancing method provided by NGINX. This method balances load by proxying the current
+    request to the upstream server with the least number of open connections proxied through NGINX.
+    Least connections, like round robin, also takes weights into account when deciding to which server to send the connection.
+    The directive name is least_conn.
+
+    - Least time :
+    Available only in NGINX Plus, is akin to least connections in that it proxies to the upstream server
+    with the least number of current connections but favors the servers with the lowest aver‐ age response times.
+    This method is one of the most sophistica‐ ted load-balancing algorithms out there and fits the need of highly performant web applications.
+    This algorithm is a value add over least connections because a small number of connec‐ tions does not necessarily mean
+    the quickest response. The directive name is least_time.
+
+    - Generic hash :
+    The administrator defines a hash with the given text, variables of the request or runtime,
+    or both. NGINX distributes the load amongst the servers by producing a hash for the current
+    request and placing it against the upstream servers. This method is very useful when you need more control
+    over where requests are sent or determining what upstream server most likely will have the data cached.
+    Note that when a server is added or removed from the pool, the hashed requests will be redistributed.
+    This algo‐ rithm has an optional parameter, consistent, to minimize the effect of redistribution.
+    The directive name is hash.
+
+    - IP hash
+    Only supported for HTTP, is the last of the bunch. IP hash uses the client IP address as the hash.
+    Slightly different from using the remote variable in a generic hash, this algorithm uses the first
+    three octets of an IPv4 address or the entire IPv6 address. This method ensures that clients get proxied
+    to the same upstream server as long as that server is available, which is extremely helpful when the session
+    state is of concern and not handled by shared memory of the application. This method also takes the weight
+    parameter into consideration when distribut‐ ing the hash. The directive name is ip_hash.
+
+
+    1.4 Connection Limiting
+
+    + Problem :
+    You have too much load overwhelming your upstream servers.
+
+    + Solution :
+    Use NGINX Plus’s max_conns parameter to limit connections to upstream servers:
+
+    upstream backend {
+        zone backends 64k;
+        queue 750 timeout=30s;
+        server webserver1.example.com max_conns=25;
+        server webserver2.example.com max_conns=15;
+    }
+
+    -> The connection-limiting feature is currently only available in NGINX Plus.
+       This NGINX Plus configuration sets an integer on each upstream server
+       that specifies the max number of connections to be handled at any given time.
+       If the max number of connections has been reached on each server,
+       the request can be placed into the queue for further processing,
+       provided the optional queue directive is specified.
+       The optional queue directive sets the maximum number of requests that can
+       be simultaneously in the queue. A shared mem‐ ory zone is created by use of
+       the zone directive.
+       The shared memory zone allows NGINX Plus worker processes to share information
+       about how many connections are handled by each server and how many requests are queued.
+
+    ++ Optionally, in NGINX Plus, if all upstream servers are at their max_conns limit, NGINX Plus can start to queue
+       new connections until resources are freed to handle those connections. Specifying a queue is optional.
+       When queuing, we must take into consideration a reasonable queue length. Much like in everyday life,
+       users and appli‐ cations would much rather be asked to come back after a short period of time than wait
+       in a long line and still not be served. The queue directive in an upstream block specifies the max length of
+       the queue. The timeout parameter of the queue directive specifies how long any given request should wait
+       in queue before giving up, which defaults to 60 seconds.
+
