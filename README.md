@@ -2617,3 +2617,46 @@
     This section compiles NGINX from source with the ModSecurity for NGINX. It’s advised when compiling NGINX from source to always check that you’re using
     the latest stable packages available. With the preceding example, you can use the open source version of NGINX along with ModSecurity to build your own open source web application firewall.
 
+    + Practical Security Tips :
+
+    20.1 HTTPS Redirects
+
+    + Problem :
+    You need to redirect unencrypted requests to HTTPS.
+
+    + Solution :
+    Use a rewrite to send all HTTP traffic to HTTPS:
+
+    server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        server_name _;
+        return 301 https://$host$request_uri;
+    }
+
+    This configuration listens on port 80 as the default server for both IPv4 and IPv6 and for any hostname.
+    The return statement returns a 301 permanent redirect to the HTTPS server at the same host and request URI.
+
+    Discussion
+    It’s important to always redirect to HTTPS where appropriate. You may find that you do not need to redirect all
+    requests but only those with sensitive information being passed between client and server.
+    In that case, you may want to put the return statement in particular locations only, such as /login.
+
+    20.3 HTTP Strict Transport Security
+
+    + Problem :
+    You need to instruct browsers to never send requests over HTTP.
+
+    + Solution :
+    Use the HTTP Strict Transport Security (HSTS) enhancement by setting the Strict-Transport-Security header:
+
+          add_header Strict-Transport-Security max-age=31536000;
+
+    This configuration sets the Strict-Transport-Security header to a max age of a year. This will instruct the browser
+    to always do an internal redirect when HTTP requests are attempted to this domain, so that all requests will be made over HTTPS.
+
+    Discussion
+    For some applications a single HTTP request trapped by a man in the middle attack could be the end of the company.
+    If a form post containing sensitive information is sent over HTTP, the HTTPS redirect from NGINX won’t save you;
+    the damage is done. This opt- in security enhancement informs the browser to never make an HTTP request,
+    therefore the request is never sent unencrypted.
