@@ -2450,3 +2450,50 @@
         institute a connection limit as well as a bandwidth limit where applicable.
 
 
+    - Encryption :
+
+    + 13.1 Client-Side Encryption
+
+    - Problem :
+    You need to encrypt traffic between your NGINX server and the client.
+
+    - Solution :
+    Utilize one of the SSL modules, such as the ngx_http_ssl_module or ngx_stream_ssl_module to encrypt traffic:
+
+        http {
+        # All directives used below are also valid in stream
+
+            server {
+                listen 8433 ssl;
+                ssl_protocols TLSv1.2;
+                ssl_ciphers HIGH:!aNULL:!MD5;
+                ssl_certificate /usr/local/nginx/conf/cert.pem;
+                ssl_certificate_key /usr/local/nginx/conf/cert.key;
+                ssl_session_cache shared:SSL:10m;
+                ssl_session_timeout 10m;
+            }
+        }
+
+    ++ This configuration sets up a server to listen on a port encrypted with SSL, 8443. The server accepts the SSL protocol version TLSv1.2.
+       The SSL certificate and key locations are disclosed to the server for use. The server is instructed to use the highest strength offered
+       by the client while restricting a few that are insecure. The SSL session cache and timeout allow for workers to cache and store session
+       parameters for a given amount of time. There are many other session cache options that can help with performance or security of all types of use cases.
+       Session cache options can be used in conjunction. However, specifying one without the default will turn off that default, built-in session cache.
+
+    13.2 Upstream Encryption
+
+    + Problem :
+    You need to encrypt traffic between NGINX and the upstream ser‐ vice and set specific negotiation rules for compliance regulations or if the upstream is outside of your secured network.
+
+    + Solution :
+    Use the SSL directives of the HTTP proxy module to specify SSL rules:
+        location / {
+            proxy_pass https://upstream.example.com;
+            proxy_ssl_verify on;
+            proxy_ssl_verify_depth 2;
+            proxy_ssl_protocols TLSv1.2;
+        }
+
+    These proxy directives set specific SSL rules for NGINX to obey. The configured directives ensure that NGINX verifies that the certificate and chain on the upstream service is valid up to two certificates deep.
+    The proxy_ssl_protocols directive specifies that NGINX will only use TLS version 1.2. By default NGINX does not verify upstream certificates and accepts all TLS versions.
+
