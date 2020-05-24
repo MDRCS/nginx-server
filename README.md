@@ -2218,3 +2218,153 @@
 
     - This JSON feed enables you to feed the monitoring data into any other number of systems you may be utilizing for monitor‐ ing,
       such as Graphite, Datadog, and Splunk.
+
+    + DevOps On-the-Fly Reconfiguration :
+
+    8.1 The NGINX API
+
+    + Problem :
+        You have a dynamic environment and need to reconfigure NGINX on the fly.
+
+    + Solution :
+        Configure the NGINX Plus API to enable adding and removing servers through API calls:
+
+        location /upstream_conf {
+            upstream_conf;
+            allow 10.0.0.0/8; # permit access from private network
+            deny all; # deny access from everywhere else
+        }
+            ...
+            upstream backend {
+                zone backend 64k;
+                state /var/lib/nginx/state/backend.state; ...
+            }
+
+
+        The NGINX Plus configuration enables the upstream configuration API and only allows access from a private network.
+        The configura‐ tion of the upstream block defines a shared memory zone named backend of 64 kilobytes.
+        The state directive tells NGINX to persist these changes through a restart by saving them to the filesystem.
+        Utilize the API to add servers when they come online:
+
+        $ curl 'http://nginx.local/upstream_conf?\add=&upstream=backend&server=10.0.0.42:8080'
+
+        The curl call demonstrated makes a request to NGINX Plus and requests a new server be added to the backend upstream configuration.
+        Utilize the NGINX Plus API to list the servers in the upstream pool:
+        $ curl 'http://nginx.local/upstream_conf?upstream=backend' server 10.0.0.42:8080; # id=0
+
+        The curl call demonstrated makes a request to NGINX Plus to list all of the servers in the upstream pool named backend.
+        Currently we only have the one server that we added in the previous curl call to the API. The list request will show the IP address,
+        port, and ID of each server in the pool.
+        Use the NGINX Plus API to drain connections from an upstream server, preparing it for a graceful removal from the upstream pool.
+
+        $ curl 'http://nginx.local/upstream_conf?\ upstream=backend&id=0&drain=1'
+        server 10.0.0.42:8080; # id=0 draining
+
+        In this curl, we specify arguments for the upstream pool, backend, the ID of the server we wish to drain, 0,
+        and set the drain argument to equal 1. We found the ID of the server by listing the servers in the upstream pool in the previous curl command.
+        NGINX Plus will begin to drain the connections. This process can take as long as the length of the sessions of the application.
+
+
+    After all connections have drained, utilize the NGINX Plus API to remove the server from the upstream pool entirely:
+    $ curl 'http://nginx.local/upstream_conf?\ upstream=backend&id=0&remove=1'
+
+    -> The curl command passes arguments to the NGINX Plus API to remove server 0 from the upstream pool named backend.
+       This API call will return all of the servers and their IDs that are still left in the pool. As we started with an empty pool,
+       added only one server through the API, drained it, and then removed it, we now have an empty pool again.
+
+
+    8.2 Seamless Reload
+
+    + Problem :
+    You need to reload you configuration without dropping packets.
+
+    + Solution :
+    Use the reload method of NGINX to achieve a seamless reload of the configuration without stopping the server:
+    service nginx reload
+    The command-line example reloads the NGINX system using the
+    NGINX init script generally located in the /etc/init.d/ directory.
+
+    8.3 SRV Records Problem
+        You’d like to use your existing DNS SRV record implementation as the source for upstream servers.
+        Solution
+        Specify the service directive with a value of http on an upstream server to instruct NGINX to utilize
+        the SRV record as a load- balancing pool:
+        http {
+            resolver 10.0.0.2;
+            upstream backend {
+            zone backends 64k;
+            server api.example.internal service=http resolve;
+        }
+    }
+
+
+    The configuration instructs NGINX to resolve DNS from a DNS server at 10.0.0.2 and set up an upstream server pool
+    with a single server directive. This server directive specified with the resolve parameter is instructed to periodically
+    re-resolve the domain name. The service=http parameter and value tells NGINX that this is an SRV record containing a list of IPs
+    and ports and to load balance over them as if they were configured with the server directive.
+
+    - Controlling Access :
+    11.1 Access Based on IP Address
+
+    + Problem :
+    You need to control access based on the IP address of the client.
+
+    + Solution :
+    Use the HTTP access module to control access to protected resources:
+
+    location /admin/ {
+        deny 10.0.0.1;
+        allow 10.0.0.0/20;
+        allow 2001:0db8::/32;
+        deny all;
+    }
+
+    ++ The given location block allows access from any IPv4 address in 10.0.0.0/20 except 10.0.0.1,
+       allows access from IPv6 addresses in the 2001:0db8::/32 subnet, and returns a 403 for
+       requests originating from any other address. The allow and deny directives are valid within the HTTP,
+       server, and location contexts. Rules are checked in sequence until a match is found for the remote address.
+
+
+    11.2 Allowing Cross-Origin Resource Sharing
+
+    + Problem :
+    You’re serving resources from another domain and need to allow CORS to enable browsers to utilize these resources.
+
+    + Solution :
+    Alter headers based on the request method to enable CORS:
+    map $request_method $cors_method {
+        OPTIONS 11;
+        GET 1;
+        POST 1;
+        default 0;
+       }
+
+    server {
+        ...
+        location / {
+        if ($cors_method ~ '1') {
+            add_header 'Access-Control-Allow-Methods' 'GET,POST,OPTIONS';
+            add_header 'Access-Control-Allow-Origin' '*.example.com';
+            add_header 'Access-Control-Allow-Headers' 'DNT,
+                                    Keep-Alive,
+                                    User-Agent,
+                                    X-Requested-With,
+                                    If-Modified-Since,
+                                    Cache-Control,
+                                    Content-Type';
+        if ($cors_method = '11') {
+            add_header 'Access-Control-Max-Age' 1728000; add_header 'Content-Type' 'text/plain; charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+                    }
+          }
+
+        }
+
+
+    ++ There’s a lot going on in this example, which has been condensed by using a map to group the GET and POST methods together.
+       The OPTIONS request method returns information called a preflight request to the client about this server’s CORS rules.
+       OPTIONS, GET, and POST methods are allowed under CORS. Setting the Access- Control-Allow-Origin header allows
+       for content being served from this server to also be used on pages of origins that match this header.
+       The preflight request can be cached on the client for 1,728,000 sec‐ onds, or 20 days.
+
