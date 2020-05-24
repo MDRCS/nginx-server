@@ -1640,7 +1640,7 @@
     $ systemctl reload nginx
 
 
-### Advanced NGINX Recipes :
+### Advanced NGINX plus Recipes :
 
     1.2 TCP Load Balancing
 
@@ -1669,6 +1669,7 @@
 
 
     # + Load Balancing Algorithms :
+
     - Round robin :
     The default load-balancing method, which distributes requests in order of the list of servers
     in the upstream pool. Weight can be taken into consideration for a weighted round robin,
@@ -1742,4 +1743,179 @@
        in a long line and still not be served. The queue directive in an upstream block specifies the max length of
        the queue. The timeout parameter of the queue directive specifies how long any given request should wait
        in queue before giving up, which defaults to 60 seconds.
+
+
+    -> Intelligent Session Persistence
+
+    NGINX Plus’s sticky directive alleviates difficulties of server affinity at the traffic controller,
+    allowing the application to focus on its core. NGINX tracks session persistence in three ways:
+    by creating and tracking its own cookie, detecting when applications prescribe cookies,
+    or routing based on runtime variables.
+
+    2.1 Sticky Cookie
+
+    + Problem :
+    You need to bind a downstream client to an upstream server.
+
+    + Solution :
+
+    Use the sticky cookie directive to instruct NGINX Plus to create and track a cookie:
+
+        upstream backend {
+            server backend1.example.com; server backend2.example.com; sticky cookie
+                           affinity
+                           expires=1h
+                           domain=.example.com
+                           httponly
+                           secure
+                           path=/;
+        }
+
+    This configuration creates and tracks a cookie that ties a down‐ stream client to an upstream server.
+    The cookie in this example is named affinity, is set for example.com, persists an hour,
+    cannot be consumed client-side, can only be sent over HTTPS, and is valid for all paths.
+
+
+    Discussion
+    Using the cookie parameter on the sticky directive will create a cookie on first request containing
+    information about the upstream server. NGINX Plus tracks this cookie, enabling it to continue directing
+    subsequent requests to the same server. The first positional parameter to the cookie parameter is the name
+    of the cookie to be created and tracked. Other parameters offer additional control informing the browser
+    of the appropriate usage, like the expire time, domain, path, and whether the cookie can be consumed
+    client-side or if it can be passed over unsecure protocols.
+
+
+    2.2 Sticky Learn
+
+    + Problem
+    You need to bind a downstream client to an upstream server by using an existing cookie.
+
+    + Solution
+    Use the sticky learn directive to discover and track cookies that are created by the upstream application:
+        upstream backend {
+            server backend1.example.com:8080;
+            server backend2.example.com:8081;
+            sticky learn
+                   create=$upstream_cookie_cookiename
+                   lookup=$cookie_cookiename
+                   zone=client_sessions:2m;
+            }
+
+    -> The example instructs NGINX to look for and track sessions by looking for a cookie named COOKIENAME
+       in response headers, and looking up existing sessions by looking for the same cookie on request headers.
+       This session affinity is stored in a shared memory zone of 2 megabytes that can track approximately 16,000 sessions.
+       The name of the cookie will always be application specific. Com‐ monly used cookie names such as jsessionid or phpsessionid
+       are typically defaults set within the application or the application server configuration.
+
+
+    2.4 Connection Draining Problem
+        You need to gracefully remove servers for maintenance or other rea‐ sons while still serving sessions.
+        Solution
+        Use the drain parameter through the NGINX Plus API,
+
+        to instruct NGINX to stop sending new connections that are not already tracked:
+
+        $ curl 'http://localhost/upstream_conf\ ?upstream=backend&id=1&drain=1'
+
+    Discussion
+    When session state is stored locally to a server, connections and per‐ sistent sessions must be drained before
+    it’s removed from the pool. Draining connections is the process of letting sessions to that server expire natively
+    before removing the server from the upstream pool.
+
+    Draining can be configured for a particular server by adding the drain parameter to the server directive.
+    When the drain parameter is set, NGINX Plus will stop sending new sessions to this server but will
+    allow current sessions to continue being served for the length of their session.
+
+
+    # + Application-Aware Health Checks
+
+    3.0 Introduction
+    For a number of reasons, applications fail. It could be because of network connectivity, server failure,
+    or application failure, to name a few. Proxies and load balancers must be smart enough to detect
+    fail‐ ure of upstream servers and stop passing traffic to them; otherwise, the client will be waiting,
+    only to be delivered a timeout. A way to mitigate service degradation when a server fails is to have
+    the proxy check the health of the upstream servers. NGINX offers two differ‐ ent types of health checks:
+     passive, available in the open source ver‐ sion; as well as active, available only in NGINX Plus.
+     Active health checks on a regular interval will make a connection or request to the upstream server and have
+     the ability to verify that the response is correct. Passive health checks monitor the connection or responses
+     of the upstream server as clients make the request or connection. You may want to use passive health checks
+     to reduce the load of your upstream servers, and you may want to use active health checks to determine
+     failure of an upstream server before a client is served a failure.
+
+
+    3.2 Slow Start
+
+    + Problem :
+    Your application needs to ramp up before taking on full production load.
+
+    + Solution :
+    Use the slow_start parameter on the server directive to gradually increase
+    the number of connections over a specified time as a server is reintroduced to the upstream load-balancing pool:
+
+    upstream {
+        zone backend 64k;
+        server server1.example.com slow_start=20s;
+        server server2.example.com slow_start=15s;
+    }
+
+    The server directive configurations will slowly ramp up traffic to the upstream servers after
+    they’re reintroduced to the pool. server1 will slowly ramp up its number of connections over 20 seconds,
+    and server2 over 15 seconds.
+
+    Discussion
+    Slow start is the concept of slowly ramping up the number of requests proxied to a server over a period of time.
+    Slow start allows the application to warm up by populating caches, initiating database connections without being
+    overwhelmed by connections as soon as it starts. This feature takes effect when a server that has failed health
+    checks begins to pass again and re-enters the load-balancing pool.
+
+    3.3 TCP Health Checks Problem
+    You need to check your upstream TCP server for health and remove unhealthy servers from the pool.
+    Solution
+    Use the health_check directive in the server block for an active health check:
+    stream {
+        server {
+                listen       3306;
+                proxy_pass   read_backend;
+                health_check interval=10 passes=2 fails=3;
+        }
+    }
+
+    The example monitors the upstream servers actively. The upstream server will be considered unhealthy
+    if it fails to respond to three or more TCP connections initiated by NGINX.
+    NGINX performs the check every 10 seconds. The server will only be considered healthy after passing two health checks.
+
+
+    3.4 HTTP Health Checks Problem
+    You need to actively check your upstream HTTP servers for health.
+    Solution
+    Use the health_check directive in a location block:
+    http {
+            server {
+                    ...
+
+        location / {
+            proxy_pass http://backend; health_check interval=2s
+            fails=2
+            passes=5
+            uri=/
+            match=welcome;
+        }
+    }
+        # status is 200, content type is "text/html", # and body contains "Welcome to nginx!"
+
+            match welcome {
+                        status 200;
+                        header Content-Type = text/html;
+                        body ~ "Welcome to nginx!";
+                }
+        }
+
+
+    This health check configuration for HTTP servers checks the health of the upstream servers by making
+    an HTTP request to the URI '/' every two seconds. The upstream servers must pass five consecutive
+    health checks to be considered healthy and will be considered unhealthy if they fail two consecutive checks.
+    The response from the upstream server must match the defined match block, which defines the status code as 200,
+    the header Content-Type value as 'text/ html', and the string "Welcome to nginx!"
+    in the response body.
+
 
